@@ -1,0 +1,10 @@
+# ROS 2
+build/
+install/
+log/
+
+# virtualenv
+.venv
+
+# Ruff
+.ruff_cache
