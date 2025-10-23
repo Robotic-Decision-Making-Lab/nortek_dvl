@@ -39,25 +39,31 @@ public:
 
   [[nodiscard]] auto data_size() const -> std::size_t;
 
-  [[nodiscard]] auto pop_front(std::size_t size) -> std::vector<std::uint8_t>;
-
-  [[nodiscard]] auto pop_back(std::size_t size) -> std::vector<std::uint8_t>;
-
   template <typename T>
-  [[nodiscard]] auto get() -> T;
+  [[nodiscard]] auto get() -> T
+  {
+    T value;
+    adl_serializer<T>::from_data(data_, value);
+    return value;
+  }
 
 private:
   SeriesId series_id_;
   std::vector<std::uint8_t> data_;
 };
 
+template <typename T, typename Serializer>
+struct adl_serializer
+{
+  static void from_data(const std::vector<std::uint8_t> & data, T & value) { Serializer::from_data(data, value); }
+}
+
 namespace protocol
 {
-/// Sync byte used to identify the start of a Nortek Nucleus packet.
-const std::uint8_t SYNC_BYTE = 0xA5;
+  /// Sync byte used to identify the start of a Nortek Nucleus packet.
+  const std::uint8_t SYNC_BYTE = 0xA5;
 
-template <typename T>
-[[nodiscard]] inline auto deserialize(const Packet & packet) -> T;
+  [[nodiscard]] inline auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet;
 
 }  // namespace protocol
 

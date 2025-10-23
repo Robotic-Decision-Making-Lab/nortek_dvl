@@ -29,10 +29,10 @@
 namespace nucleus
 {
 
-class NucleusDriver
+class NucleusClient
 {
 public:
-  NucleusDriver(
+  NucleusClient(
     const std::string & ip_address,
     const std::string & password,
     std::chrono::seconds connection_timeout = std::chrono::seconds(5));
@@ -466,12 +466,12 @@ public:
   ///   std::format("Received AHRS report with timestamp: {} ns", report.timestamp.count());
   /// });
   /// ```
-  template <typename ReportType>
-  auto subscribe(std::function<void(const ReportType &)> && callback) -> void
+  template <typename T>
+  auto subscribe(std::function<void(const T &)> && callback) -> void
   {
     std::lock_guard<std::mutex> lock(callback_mutex_);
-    callbacks_[typeid(ReportType)].emplace_back(
-      [cb = std::move(callback)](const void * report) { cb(*static_cast<const ReportType *>(report)); });
+    callbacks_[typeid(T)].emplace_back(
+      [cb = std::move(callback)](const void * report) { cb(*static_cast<const T *>(report)); });
   }
 
 private:
