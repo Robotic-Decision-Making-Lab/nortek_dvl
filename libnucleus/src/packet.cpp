@@ -38,6 +38,8 @@ Packet::Packet(SeriesId series_id, FamilyId family_id, std::vector<std::uint8_t>
 
 auto Packet::series_id() const -> SeriesId { return series_id_; }
 
+auto Packet::family_id() const -> FamilyId { return family_id_; }
+
 auto Packet::data() const -> std::vector<std::uint8_t> { return data_; }
 
 auto Packet::data_size() const -> std::size_t { return data_.size(); }
@@ -134,7 +136,7 @@ auto decode_packets(const std::vector<std::uint8_t> & data) -> std::vector<Packe
       packets.push_back(packet);
     }
     catch (const std::exception & e) {  // NOLINT(bugprone-empty-catch)
-      // skip invalid packets - we don't log here to avoid spamming the user
+      // skip invalid packets (usually just incomplete packets) - we don't log here to avoid spamming the user
     }
   }
 

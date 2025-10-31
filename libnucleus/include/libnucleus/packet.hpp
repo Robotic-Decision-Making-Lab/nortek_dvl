@@ -31,11 +31,11 @@ namespace nucleus
 {
 
 template <typename T>
-struct Serializer
+struct Deserializer
 {
   static void from_data(const std::vector<std::uint8_t> & /*data*/, T & /*value*/)
   {
-    std::printf("No serializer defined for this type.\n");
+    std::printf("No deserializer defined for this type.\n");
   }
 };
 
@@ -57,7 +57,7 @@ public:
   [[nodiscard]] auto get() -> T
   {
     T value;
-    Serializer<T>::from_data(data_, value);
+    Deserializer<T>::from_data(data_, value);
     return value;
   }
 

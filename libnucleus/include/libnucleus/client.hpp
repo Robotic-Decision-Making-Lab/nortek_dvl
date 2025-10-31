@@ -21,6 +21,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <deque>
 #include <future>
 #include <string>
@@ -28,7 +29,7 @@
 #include <typeindex>
 #include <unordered_map>
 
-#include "libnucleus/protocol.hpp"
+#include "libnucleus/mode.hpp"
 
 namespace nucleus
 {
@@ -36,8 +37,10 @@ namespace nucleus
 class NucleusClient
 {
 public:
+  NucleusClient(const std::string & addr, std::chrono::seconds connection_timeout = std::chrono::seconds(5));
+
   NucleusClient(
-    const std::string & ip_address,
+    const std::string & addr,
     const std::string & password,
     std::chrono::seconds connection_timeout = std::chrono::seconds(5));
 
@@ -49,7 +52,7 @@ public:
   /// Command: START
   /// Command type: ACTION
   /// Mode: COMMAND
-  [[nodiscard]] auto start_measurement() const -> std::future<CommandResponse>;
+  [[nodiscard]] auto start_measurement() -> std::future<bool>;
 
   /// Stop measurement.
   ///
@@ -58,7 +61,7 @@ public:
   /// Command: STOP
   /// Command type: ACTION
   /// Mode: MEASUREMENT
-  [[nodiscard]] auto stop_measurement() const -> std::future<CommandResponse>;
+  [[nodiscard]] auto stop_measurement() -> std::future<bool>;
 
   /// Trigger an acoustic measurement.
   ///
@@ -71,7 +74,7 @@ public:
   /// Command: TRIG
   /// Command type: ACTION
   /// Mode: MEASUREMENT
-  [[nodiscard]] auto trigger() const -> std::future<CommandResponse>;
+  [[nodiscard]] auto trigger() -> std::future<bool>;
 
   /// Start field calibration.
   ///
@@ -80,7 +83,7 @@ public:
   /// Command: FIELDCAL
   /// Command type: ACTION
   /// Mode: COMMAND
-  [[nodiscard]] auto start_field_calibration() const -> std::future<CommandResponse>;
+  [[nodiscard]] auto start_field_calibration() -> std::future<bool>;
 
   /// Enable fast pressure reading using the desired sampling rate (10 Hz, 15 Hz, or 30 Hz).
   ///
@@ -89,7 +92,7 @@ public:
   /// Command: SETFASTPRESSURE
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto enable_fast_pressure(int sampling_rate = 10) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto enable_fast_pressure(int sampling_rate = 10) -> std::future<bool>;
 
   /// Disable fast pressure reading.
   ///
@@ -98,7 +101,7 @@ public:
   /// Command: SETFASTPRESSURE
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto disable_fast_pressure() const -> std::future<CommandResponse>;
+  [[nodiscard]] auto disable_fast_pressure() -> std::future<bool>;
 
   /// Save the specified settings and use them as the default for future operation.
   ///
@@ -117,7 +120,7 @@ public:
   /// Command: SAVE
   /// Command type: ACTION
   /// Mode: COMMAND
-  [[nodiscard]] auto save_settings(const std::string & settings = "ALL") const -> std::future<CommandResponse>;
+  [[nodiscard]] auto save_settings(const std::string & settings = "ALL") -> std::future<bool>;
 
   /// Revert to the factory default settings.
   ///
@@ -137,8 +140,7 @@ public:
   /// Command: SETDEFAULT
   /// Command type: ACTION
   /// Mode: COMMAND
-  [[nodiscard]] auto revert_to_default_settings(const std::string & settings = "ALL") const
-    -> std::future<CommandResponse>;
+  [[nodiscard]] auto revert_to_default_settings(const std::string & settings = "ALL") -> std::future<bool>;
 
   /// Restore previously saved settings.
   ///
@@ -154,7 +156,7 @@ public:
   /// Command: RESTORE
   /// Command type: ACTION
   /// Mode: COMMAND
-  [[nodiscard]] auto restore_settings(const std::string & settings = "ALL") const -> std::future<CommandResponse>;
+  [[nodiscard]] auto restore_settings(const std::string & settings = "ALL") -> std::future<bool>;
 
   /// Set the mission settings, including:
   ///   - offset value (dBar) of the pressure sensor, [0, 11] dBar,
@@ -181,21 +183,21 @@ public:
     double range = 50.0,
     double blanking_distance = 0.1,
     double speed_of_sound = 1481,
-    double salinity = 35.0) const -> std::future<CommandResponse>;
+    double salinity = 35.0) -> std::future<bool>;
 
   /// Enable the instrument LED indicator.
   ///
   /// Command: SETINST
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto enable_led() const -> std::future<CommandResponse>;
+  [[nodiscard]] auto enable_led() -> std::future<bool>;
 
   /// Disable the instrument LED indicator.
   ///
   /// Command: SETINST
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto disable_led() const -> std::future<CommandResponse>;
+  [[nodiscard]] auto disable_led() -> std::future<bool>;
 
   /// Set the instrument orientation with respect to the body frame using:
   ///   - yaw (deg),
@@ -207,15 +209,14 @@ public:
   /// Command: SETINST
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_mounting_orientation(double roll, double pitch, double yaw) const
-    -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_mounting_orientation(double roll, double pitch, double yaw) -> std::future<bool>;
 
   /// Set the AHRS output frequency (Hz); in the range [1, 100] Hz.
   ///
   /// Command: SETAHRS
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_ahrs_output_frequency(int frequency) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_ahrs_output_frequency(int frequency) -> std::future<bool>;
 
   /// Set the AHRS mode:
   ///   - 0: Fixed hard iron / soft iron,
@@ -225,14 +226,34 @@ public:
   /// Command: SETAHRS
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_ahrs_mode(int mode) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_ahrs_mode(int mode) -> std::future<bool>;
 
   /// Configure the navigation data output frequency (Hz); in the range [1, 100] Hz.
   ///
   /// Command: SETNAV
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_navigation_data_output_frequency(int frequency) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_navigation_data_output_frequency(int frequency) -> std::future<bool>;
+
+  /// Use water track in navigation estimation.
+  ///
+  /// NOTE: If this is called while the instrument is in measurement mode, this function will call the APPLYNAV command
+  /// internally to apply the new navigation settings.
+  ///
+  /// Command: SETNAV
+  /// Command type: CONFIGURATION
+  /// Mode: COMMAND
+  [[nodiscard]] auto enable_navigation_water_track() -> std::future<bool>;
+
+  /// Disable water track in navigation estimation.
+  ///
+  /// NOTE: If this is called while the instrument is in measurement mode, this function will call the APPLYNAV command
+  /// internally to apply the new navigation settings.
+  ///
+  /// Command: SETNAV
+  /// Command type: CONFIGURATION
+  /// Mode: COMMAND
+  [[nodiscard]] auto disable_navigation_water_track() -> std::future<bool>;
 
   /// Specify how the field calibration is performed given the desired mode:
   ///   - 1: hard iron estimation,
@@ -243,7 +264,7 @@ public:
   /// Command: SETFIELDCAL
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_field_calibration_mode(int mode) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_field_calibration_mode(int mode) -> std::future<bool>;
 
   /// Set the bottom track mode. The mode should be set to one of the following:
   ///   - "FAST_ACQ": fast acquisition mode,
@@ -253,7 +274,7 @@ public:
   /// Command: SETBT
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_bottom_track_mode(const std::string & mode) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_bottom_track_mode(const std::string & mode) -> std::future<bool>;
 
   /// Set the bottom track velocity range (m/s).
   ///
@@ -262,17 +283,37 @@ public:
   /// Command: SETBT
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_bottom_track_velocity_range(double range) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_bottom_track_velocity_range(double range) -> std::future<bool>;
 
-  /// Set the power level (dB) for the DVL in bottom track mode, in the range [-20, 0] dB.
-  ///
-  /// To set the power level to the maximum value, set the power level to NaN. To turn off transmit, set the power level
-  /// to -100 dB.
+  /// Enable water track measurements in bottom track mode.
   ///
   /// Command: SETBT
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_bottom_track_power_level(double power_level) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto enable_bottom_track_water_track() -> std::future<bool>;
+
+  /// Disable water track measurements in bottom track mode.
+  ///
+  /// Command: SETBT
+  /// Command type: CONFIGURATION
+  /// Mode: COMMAND
+  [[nodiscard]] auto disable_bottom_track_water_track() -> std::future<bool>;
+
+  /// Set the power mode for the DVL. This should be set to one of the following:
+  ///    - "MAX": The power level is always set to the maximum value,
+  ///    - "USER": The power level is set manually using SETBT,PL
+  ///
+  /// Command: SETBT
+  /// Command type: CONFIGURATION
+  /// Mode: COMMAND
+  [[nodiscard]] auto set_bottom_track_power_mode(const std::string & mode) -> std::future<bool>;
+
+  /// Set the power level (dB) for the DVL in bottom track mode, in the range [-20, 0] dB.
+  ///
+  /// Command: SETBT
+  /// Command type: CONFIGURATION
+  /// Mode: COMMAND
+  [[nodiscard]] auto set_bottom_track_power_level(double power_level) -> std::future<bool>;
 
   /// Mark the measurement data for future reference in the data log.
   ///
@@ -280,7 +321,7 @@ public:
   /// Command: APPLYTAG
   /// Command type: CONFIGURATION
   /// Mode: MEASUREMENT
-  [[nodiscard]] auto tag(const std::string & name) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto tag(const std::string & name) -> std::future<bool>;
 
   /// Set the water track mode. The mode should be set to one of the following:
   ///   - "FIXED": assumes that current direction is fixed in NED,
@@ -289,14 +330,14 @@ public:
   /// Command: SETWT
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_water_track_mode(const std::string & mode) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_water_track_mode(const std::string & mode) -> std::future<bool>;
 
   /// Set the initial current velocity (m/s), in the range [-10, 10] m/s.
   ///
   /// Command: SETWT
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_water_track_current(double vx, double vy, double vz) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_water_track_current(double vx, double vy, double vz) -> std::future<bool>;
 
   /// Set the altimeter power level (dB), in the range [-20, 0] dB.
   ///
@@ -305,7 +346,7 @@ public:
   /// Command: SETALTI
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_altimeter_power_level(double power_level) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_altimeter_power_level(double power_level) -> std::future<bool>;
 
   /// Set the current profile measurement settings, including:
   ///   - profile range (m), in the range [1, 30],
@@ -322,8 +363,8 @@ public:
   /// Command: SETCURPROF
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_current_profile(double range, double cs, double bd, const std::string & coord) const
-    -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_current_profile(double range, double cs, double bd, const std::string & coord)
+    -> std::future<bool>;
 
   /// Set the trigger source, to one of the following:
   ///   - "INTERNAL": internal triggering at a fixed frequency,
@@ -335,7 +376,7 @@ public:
   /// Command: SETTRIG
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_trigger_source(const std::string & source) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_trigger_source(const std::string & source) -> std::future<bool>;
 
   /// Set the internal trigger frequency (Hz), in the range [1, 8] Hz.
   ///
@@ -346,7 +387,7 @@ public:
   /// Command: SETTRIG
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_internal_trigger_frequency(int frequency) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_internal_trigger_frequency(int frequency) -> std::future<bool>;
 
   /// Set the altimeter and current profile interleave ratios.
   ///
@@ -360,22 +401,21 @@ public:
   /// Command: SETTRIG
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_trigger_interleave_ratios(int altimeter_ratio, int current_profile_ratio) const
-    -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_trigger_interleave_ratios(int altimeter_ratio, int current_profile_ratio) -> std::future<bool>;
 
   /// Set the IMU output frequency (Hz) given a frequency in the range [1, 100] Hz.
   ///
   /// Command: SETIMU
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_imu_output_frequency(int frequency) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_imu_output_frequency(int frequency) -> std::future<bool>;
 
   /// Set the magnetometer output frequency (Hz) given a frequency in the range [1, 75] Hz.
   ///
   /// Command: SETMAG
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_magnetometer_output_frequency(int frequency) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_magnetometer_output_frequency(int frequency) -> std::future<bool>;
 
   /// Set the magnetometer declination method, to one of the following:
   ///   - "AUTO": if the initial position is set (using SETMISSION), "WMM" is chosen, otherwise, the declination method
@@ -387,16 +427,14 @@ public:
   /// Command: SETMAG
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_magnetometer_declination_method(const std::string & method) const
-    -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_magnetometer_declination_method(const std::string & method) -> std::future<bool>;
 
   /// Set the magnetometer hard iron calibration values (Gauss) to values in the range [-1, 1].
   ///
   /// Command: SETMAGCAL
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_magnetometer_hard_iron_calibration(double x, double y, double z) const
-    -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_magnetometer_hard_iron_calibration(double x, double y, double z) -> std::future<bool>;
 
   /// Set the magnetometer soft iron compensation matrix to values in the range [-2, 2].
   ///
@@ -412,14 +450,14 @@ public:
     double m23,
     double m31,
     double m32,
-    double m33) const -> std::future<CommandResponse>;
+    double m33) -> std::future<bool>;
 
   /// Update the local position (m) during a mission, given x and y coordinates.
   ///
   /// Command: UPDATEPOS
   /// Command type: CONFIGURATION
   /// Mode: MEASUREMENT
-  [[nodiscard]] auto update_mission_local_position(double x, double y) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto update_mission_local_position(double x, double y) -> std::future<bool>;
 
   /// Update the relative position change (m) with respect to the initial position during a mission, given the relative
   /// x and y coordinates.
@@ -427,15 +465,14 @@ public:
   /// Command: UPDATEPOS
   /// Command type: CONFIGURATION
   /// Mode: MEASUREMENT
-  [[nodiscard]] auto update_mission_relative_position(double x, double y) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto update_mission_relative_position(double x, double y) -> std::future<bool>;
 
   /// Update the global position (deg) during a mission, given longitude and latitude.
   ///
   /// Command: UPDATEPOS
   /// Command type: CONFIGURATION
   /// Mode: MEASUREMENT
-  [[nodiscard]] auto update_mission_global_position(double longitude, double latitude) const
-    -> std::future<CommandResponse>;
+  [[nodiscard]] auto update_mission_global_position(double longitude, double latitude) -> std::future<bool>;
 
   /// Update the water track mode during a mission to one of the following:
   ///   - "FIXED": assumes that current direction is fixed in NED,
@@ -444,36 +481,35 @@ public:
   /// Command: UPDATEWT
   /// Command type: CONFIGURATION
   /// Mode: MEASUREMENT
-  [[nodiscard]] auto update_mission_water_track_mode(const std::string & mode) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto update_mission_water_track_mode(const std::string & mode) -> std::future<bool>;
 
   /// Update the water track current velocity (m/s) during a mission.
   ///
   /// Command: UPDATEWT
   /// Command type: CONFIGURATION
   /// Mode: MEASUREMENT
-  [[nodiscard]] auto update_mission_current_velocity(double vx, double vy, double vz) const
-    -> std::future<CommandResponse>;
+  [[nodiscard]] auto update_mission_current_velocity(double vx, double vy, double vz) -> std::future<bool>;
 
   /// Set the real-time clock of the instrument to the current system time.
   ///
   /// Command: SETCLOCKSTR
   /// Command type: CONFIGURATION
   /// Mode: COMMAND
-  [[nodiscard]] auto set_time() const -> std::future<CommandResponse>;
+  [[nodiscard]] auto set_time() -> std::future<bool>;
 
   /// Reboot the instrument.
   ///
   /// Command: REBOOT
   /// Command type: ACTION
   /// Mode: COMMAND
-  [[nodiscard]] auto reboot() const -> std::future<CommandResponse>;
+  [[nodiscard]] auto reboot() -> std::future<bool>;
 
   /// Get the most recent error message from the instrument.
   ///
   /// Command: GETERROR
   /// Command type: INFO
   /// Mode: COMMAND
-  [[nodiscard]] auto get_error() const -> std::future<std::string>;
+  [[nodiscard]] auto get_error() -> std::future<std::string>;
 
   /// Register a callback function to receive reports of the specified type.
   ///
@@ -488,12 +524,12 @@ public:
   {
     std::lock_guard<std::mutex> lock(callback_mutex_);  // NOLINT
     callbacks_[typeid(T)].emplace_back(
-      [cb = std::move(callback)](const void * report) { cb(*static_cast<const T *>(report)); });
+      [cb = std::move(callback)](const void * report) -> auto { cb(*static_cast<const T *>(report)); });
   }
 
 private:
   /// Send a command to the instrument and return a future for the command response.
-  [[nodiscard]] auto send_command(const std::string & command) const -> std::future<CommandResponse>;
+  [[nodiscard]] auto send_command(const std::string & command, Mode required_mode) -> std::future<bool>;
 
   /// Poll the connection for incoming data.
   auto poll_connection() -> void;
@@ -505,13 +541,16 @@ private:
 
   std::atomic<bool> running_{false};
 
-  std::unordered_map<std::string, std::deque<std::promise<CommandResponse>>> pending_requests_;
-  std::mutex request_mutex_;
+  std::unordered_map<std::string, std::deque<std::promise<bool>>> pending_commands_;
+  std::mutex command_mutex_;
 
   std::thread polling_thread_;
 
   std::unordered_map<std::type_index, std::vector<std::function<void(const void *)>>> callbacks_;
   std::mutex callback_mutex_;
+
+  bool command_interface_available_{false};
+  Mode mode_{Mode::COMMAND};
 };
 
 }  // namespace nucleus

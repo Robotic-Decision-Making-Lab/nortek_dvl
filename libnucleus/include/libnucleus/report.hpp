@@ -305,21 +305,6 @@ struct VelocityReport : CommonData
   bool covariance_valid;
 };
 
-struct CommandResponse
-{
-  /// Whether or not the command was successful.
-  bool success;
-
-  /// The error message, if any.
-  std::string error_message;
-
-  /// The error code, if any.
-  int error_code;
-
-  /// The valid limits for the command, if an error was experienced.
-  std::string valid_limits;
-};
-
 namespace protocol
 {
 
@@ -341,7 +326,7 @@ template <typename T>
     throw std::invalid_argument("Cannot deserialize data into the requested type due to mismatched sizes.");
   }
 
-  // this isn't super efficient, but the data rates are low enough that it shouldn't matter
+  // this isn't efficient, but the data rates are low enough that it shouldn't matter
   auto popped = data | std::views::take(bytes);
   erase(data, bytes);
 
@@ -390,7 +375,7 @@ auto check_flag(std::uint32_t status, std::size_t bit) -> bool { return (status 
 }  // namespace protocol
 
 template <>
-struct Serializer<AHRSReport>
+struct Deserializer<AHRSReport>
 {
   static void from_data(std::vector<std::uint8_t> data, AHRSReport & report)
   {
@@ -429,13 +414,13 @@ struct Serializer<AHRSReport>
 };
 
 template <>
-struct Serializer<INSReport>
+struct Deserializer<INSReport>
 {
   static void from_data(std::vector<std::uint8_t> data, INSReport & report)
   {
     // this modifies a copy of the data
     // we pass a copy to the method, so no slicing occurs
-    Serializer<AHRSReport>::from_data(data, report);
+    Deserializer<AHRSReport>::from_data(data, report);
 
     auto before_after = protocol::split_data(data, report.data_offset);
     auto after = std::move(before_after.second);
@@ -472,7 +457,7 @@ struct Serializer<INSReport>
 };
 
 template <>
-struct Serializer<IMUReport>
+struct Deserializer<IMUReport>
 {
   static void from_data(std::vector<std::uint8_t> data, IMUReport & report)
   {
@@ -499,7 +484,7 @@ struct Serializer<IMUReport>
 };
 
 template <>
-struct Serializer<MagnetometerReport>
+struct Deserializer<MagnetometerReport>
 {
   static void from_data(std::vector<std::uint8_t> data, MagnetometerReport & report)
   {
@@ -522,7 +507,7 @@ struct Serializer<MagnetometerReport>
 };
 
 template <>
-struct Serializer<AltimeterReport>
+struct Deserializer<AltimeterReport>
 {
   static void from_data(std::vector<std::uint8_t> data, AltimeterReport & report)
   {
@@ -549,7 +534,7 @@ struct Serializer<AltimeterReport>
 };
 
 template <>
-struct Serializer<FieldCalibrationReport>
+struct Deserializer<FieldCalibrationReport>
 {
   static void from_data(std::vector<std::uint8_t> data, FieldCalibrationReport & report)
   {
@@ -576,7 +561,7 @@ struct Serializer<FieldCalibrationReport>
 };
 
 template <>
-struct Serializer<FastPressureReport>
+struct Deserializer<FastPressureReport>
 {
   static void from_data(std::vector<std::uint8_t> data, FastPressureReport & report)
   {
@@ -587,7 +572,7 @@ struct Serializer<FastPressureReport>
 };
 
 template <>
-struct Serializer<VelocityReport>
+struct Deserializer<VelocityReport>
 {
   static void from_data(std::vector<std::uint8_t> data, VelocityReport & report)
   {
@@ -656,7 +641,7 @@ struct Serializer<VelocityReport>
 };
 
 template <>
-struct Serializer<std::string>
+struct Deserializer<std::string>
 {
   static void from_data(std::vector<std::uint8_t> data, std::string & response)
   {
