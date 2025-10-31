@@ -25,6 +25,8 @@
 #include <cstdint>
 #include <ranges>
 
+#include "libnucleus/packet.hpp"
+
 namespace nucleus
 {
 
@@ -195,7 +197,7 @@ struct AltimeterReport : CommonData
   float speed_of_sound;
 
   // Altitude (m).
-  float altitude;
+  float distance;
 
   // Pressure (Bar).
   float pressure;
@@ -322,7 +324,7 @@ namespace protocol
 {
 
 /// Removed the specified number of bytes from the front of the data vector.
-auto erase_bytes(std::vector<std::uint8_t> & data, std::size_t num_bytes) -> void
+auto erase(std::vector<std::uint8_t> & data, std::size_t num_bytes) -> void
 {
   if (data.size() < num_bytes) {
     throw std::invalid_argument("Cannot remove more bytes than are present in the data.");
@@ -332,38 +334,39 @@ auto erase_bytes(std::vector<std::uint8_t> & data, std::size_t num_bytes) -> voi
 
 /// Pop and return a value of the specified type from the front of the data vector.
 template <typename T>
-[[nodiscard]] auto pop_front(std::vector<std::uint8_t> & data) -> T
+[[nodiscard]] auto pop(std::vector<std::uint8_t> & data) -> T
 {
   const std::size_t bytes = sizeof(T);
   if (data.size() != bytes) {
     throw std::invalid_argument("Cannot deserialize data into the requested type due to mismatched sizes.");
   }
 
+  // this isn't super efficient, but the data rates are low enough that it shouldn't matter
   auto popped = data | std::views::take(bytes);
-  erase_bytes(data, bytes);
+  erase(data, bytes);
 
   return *reinterpret_cast<const T *>(popped.data());
 }
 
 /// Unpack the common data fields from the beginning of a data vector.
-auto unpack_common_data(const std::vector<std::uint8_t> & data, CommonData & common_data)
+auto unpack_common_data(std::vector<std::uint8_t> data, CommonData & common_data)
 {
   // unpack the version and data offset
-  common_data.version = pop_front<std::uint8_t>(data);
-  common_data.data_offset = pop_front<std::uint8_t>(data);
+  common_data.version = pop<std::uint8_t>(data);
+  common_data.data_offset = pop<std::uint8_t>(data);
 
   // unpack the flags - the first bit indicates whether POSIX time is used
-  const std::uint8_t flags = pop_front<std::uint8_t>(data);
+  const std::uint8_t flags = pop<std::uint8_t>(data);
   common_data.posix_time = (flags & 0x01) != 0;
 
   // skip the spare byte at this point
-  erase_bytes(data, 1);
+  erase(data, 1);
 
   // unpack the timestamp
-  common_data.timestamp = std::chrono::nanoseconds(pop_front<std::uint32_t>(data));
+  common_data.timestamp = std::chrono::nanoseconds(pop<std::uint32_t>(data));
 
   // unpack the time since last timestamp
-  const auto time_since_stamp = std::chrono::microseconds(pop_front<std::uint32_t>(data));
+  const auto time_since_stamp = std::chrono::microseconds(pop<std::uint32_t>(data));
   common_data.time_since_stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(time_since_stamp);
 }
 
@@ -375,8 +378,8 @@ auto split_data(const std::vector<std::uint8_t> & data, std::uint8_t offset)
     throw std::invalid_argument("Data size is smaller than the given offset.");
   }
 
-  before_offset = data | std::views::take(offset);
-  after_offset = data | std::views::drop(offset);
+  auto before_offset = data | std::views::take(offset);
+  auto after_offset = data | std::views::drop(offset);
 
   return {{before_offset.begin(), before_offset.end()}, {after_offset.begin(), after_offset.end()}};
 }
@@ -386,9 +389,10 @@ auto check_flag(std::uint32_t status, std::size_t bit) -> bool { return (status 
 
 }  // namespace protocol
 
-struct adl_serializer<AHRSReport>
+template <>
+struct Serializer<AHRSReport>
 {
-  static void from_data(const std::vector<std::uint8_t> & data, AHRSReport & report)
+  static void from_data(std::vector<std::uint8_t> data, AHRSReport & report)
   {
     protocol::unpack_common_data(data, report);
 
@@ -397,78 +401,80 @@ struct adl_serializer<AHRSReport>
     auto before = std::move(before_after.first);
     auto after = std::move(before_after.second);
 
-    protocol::erase_bytes(before, 16);  // AHRS data starts after 16 bytes
+    protocol::erase(before, 16);  // AHRS data starts after 16 bytes
 
     // deserialize everything up to the offset
-    report.serial_number = protocol::pop_front<std::uint32_t>(before);
-    report.operation_mode = protocol::pop_front<std::uint8_t>(before);
+    report.serial_number = protocol::pop<std::uint32_t>(before);
+    report.operation_mode = protocol::pop<std::uint8_t>(before);
 
-    protocol::erase_bytes(before, 3);  // spare bytes
+    protocol::erase(before, 3);  // spare bytes
 
-    report.fom = protocol::pop_front<float>(before);
-    report.fom_field_calibration = protocol::pop_front<float>(before);
+    report.fom = protocol::pop<float>(before);
+    report.fom_field_calibration = protocol::pop<float>(before);
 
     // deserialize everything after the offset
-    protocol::erase_bytes(after, 3 * sizeof(float));  // roll, pitch, yaw
+    protocol::erase(after, 3 * sizeof(float));  // roll, pitch, yaw
 
-    const float w = protocol::pop_front<float>(after);
-    const float x = protocol::pop_front<float>(after);
-    const float y = protocol::pop_front<float>(after);
-    const float z = protocol::pop_front<float>(after);
+    const float w = protocol::pop<float>(after);
+    const float x = protocol::pop<float>(after);
+    const float y = protocol::pop<float>(after);
+    const float z = protocol::pop<float>(after);
     report.orientation = Eigen::Quaternionf(w, x, y, z);
 
-    protocol::erase_bytes(after, 9 * sizeof(float));  // rotation matrix
+    protocol::erase(after, 9 * sizeof(float));  // rotation matrix
 
-    report.declination = protocol::pop_front<float>(after);
-    report.depth = protocol::pop_front<float>(after);
+    report.declination = protocol::pop<float>(after);
+    report.depth = protocol::pop<float>(after);
   }
 };
 
-struct adl_serializer<INSReport>
+template <>
+struct Serializer<INSReport>
 {
-  static void from_data(const std::vector<std::uint8_t> & data, INSReport & report)
+  static void from_data(std::vector<std::uint8_t> data, INSReport & report)
   {
     // this modifies a copy of the data
-    // we pass a reference to the method, so no slicing occurs
-    adl_serializer<AHRSReport>::from_data(data, report);
+    // we pass a copy to the method, so no slicing occurs
+    Serializer<AHRSReport>::from_data(data, report);
 
     auto before_after = protocol::split_data(data, report.data_offset);
     auto after = std::move(before_after.second);
 
-    protocol::erase_bytes(after, 72);  // drop the AHRS data that was already parsed
+    protocol::erase(after, 72);  // drop the AHRS data that was already parsed
 
-    report.fom = protocol::pop_front<float>(after);
+    report.fom = protocol::pop<float>(after);
 
-    report.lat_lon_valid = protocol::check_flag(protocol::pop_front<std::uint32_t>(after), 0);
+    report.lat_lon_valid = protocol::check_flag(protocol::pop<std::uint32_t>(after), 0);
 
-    report.course_over_ground = protocol::pop_front<float>(after);
-    report.temperature = protocol::pop_front<float>(after);
-    report.pressure = protocol::pop_front<float>(after);
-    report.altitude = protocol::pop_front<float>(after);
-    report.latitude = protocol::pop_front<double>(after);
-    report.longitude = protocol::pop_front<double>(after);
+    report.course_over_ground = protocol::pop<float>(after);
+    report.temperature = protocol::pop<float>(after);
+    report.pressure = protocol::pop<float>(after);
+    report.altitude = protocol::pop<float>(after);
+    report.latitude = protocol::pop<double>(after);
+    report.longitude = protocol::pop<double>(after);
 
-    protocol::erase_bytes(after, sizeof(double));  // reserved bytes
+    protocol::erase(after, sizeof(double));  // reserved bytes
 
-    report.x = protocol::pop_front<float>(after);
-    report.y = protocol::pop_front<float>(after);
-    report.z = protocol::pop_front<float>(after);
+    report.x = protocol::pop<float>(after);
+    report.y = protocol::pop<float>(after);
+    report.z = protocol::pop<float>(after);
 
-    protocol::erase_bytes(after, 3 * sizeof(float));  // vx, vy, vz in NED frame
+    protocol::erase(after, 3 * sizeof(float));  // vx, vy, vz in NED frame
 
-    report.vx = protocol::pop_front<float>(after);
-    report.vy = protocol::pop_front<float>(after);
-    report.vz = protocol::pop_front<float>(after);
-    report.ground_speed = protocol::pop_front<float>(after);
-    report.wx = protocol::pop_front<float>(after);
-    report.wy = protocol::pop_front<float>(after);
-    report.wz = protocol::pop_front<float>(after);
+    report.vx = protocol::pop<float>(after);
+    report.vy = protocol::pop<float>(after);
+    report.vz = protocol::pop<float>(after);
+    report.ground_speed = protocol::pop<float>(after);
+    report.wx = protocol::pop<float>(after);
+    report.wy = protocol::pop<float>(after);
+    report.wz = protocol::pop<float>(after);
   }
 };
 
-struct adl_serializer<IMUReport>
+template <>
+struct Serializer<IMUReport>
 {
-  static void from_data(const std::vector<std::uint8_t> & data, IMUReport & report)
+  static void from_data(std::vector<std::uint8_t> data, IMUReport & report)
   {
     protocol::unpack_common_data(data, report);
 
@@ -476,25 +482,26 @@ struct adl_serializer<IMUReport>
     auto before = std::move(before_after.first);
     auto after = std::move(before_after.second);
 
-    protocol::erase_bytes(before, 12);  // IMU data starts after 12 bytes
+    protocol::erase(before, 12);  // IMU data starts after 12 bytes
 
     // deserialize everything before the offset
-    report.imu_valid = protocol::check_flag(protocol::pop_front<std::uint32_t>(before), 0);
+    report.imu_valid = protocol::check_flag(protocol::pop<std::uint32_t>(before), 0);
 
     // deserialize everything after the offset
-    report.ax = protocol::pop_front<float>(after);
-    report.ay = protocol::pop_front<float>(after);
-    report.az = protocol::pop_front<float>(after);
-    report.wx = protocol::pop_front<float>(after);
-    report.wy = protocol::pop_front<float>(after);
-    report.wz = protocol::pop_front<float>(after);
-    report.temperature = protocol::pop_front<float>(after);
+    report.ax = protocol::pop<float>(after);
+    report.ay = protocol::pop<float>(after);
+    report.az = protocol::pop<float>(after);
+    report.wx = protocol::pop<float>(after);
+    report.wy = protocol::pop<float>(after);
+    report.wz = protocol::pop<float>(after);
+    report.temperature = protocol::pop<float>(after);
   }
 };
 
-struct adl_serializer<MagnetometerReport>
+template <>
+struct Serializer<MagnetometerReport>
 {
-  static void from_data(const std::vector<std::uint8_t> & data, MagnetometerReport & report)
+  static void from_data(std::vector<std::uint8_t> data, MagnetometerReport & report)
   {
     protocol::unpack_common_data(data, report);
 
@@ -502,90 +509,94 @@ struct adl_serializer<MagnetometerReport>
     auto before = std::move(before_after.first);
     auto after = std::move(before_after.second);
 
-    protocol::erase_bytes(before, 12);  // IMU data starts after 12 bytes
+    protocol::erase(before, 12);  // IMU data starts after 12 bytes
 
     // deserialize everything before the offset
-    report.is_compensated_for_hard_iron = protocol::check_flag(protocol::pop_front<std::uint32_t>(after), 0);
+    report.is_compensated_for_hard_iron = protocol::check_flag(protocol::pop<std::uint32_t>(after), 0);
 
     // deserialize everything after the offset
-    report.mx = protocol::pop_front<float>(after);
-    report.my = protocol::pop_front<float>(after);
-    report.mz = protocol::pop_front<float>(after);
+    report.mx = protocol::pop<float>(after);
+    report.my = protocol::pop<float>(after);
+    report.mz = protocol::pop<float>(after);
   }
 };
 
-struct adl_serializer<AltimeterReport>
+template <>
+struct Serializer<AltimeterReport>
 {
-  static void from_data(const std::vector<std::uint8_t> & data, AltimeterReport & report)
+  static void from_data(std::vector<std::uint8_t> data, AltimeterReport & report)
   {
     protocol::unpack_common_data(data, report);
 
-    protocol::erase_bytes(data, 12);  // altimeter data starts after 12 bytes
+    protocol::erase(data, 12);  // altimeter data starts after 12 bytes
 
     // this report doesn't have an offset
-    const auto flags = protocol::pop_front<std::uint32_t>(data);
+    const auto flags = protocol::pop<std::uint32_t>(data);
     report.altimeter_distance_valid = protocol::check_flag(flags, 0);
     report.altimeter_quality_valid = protocol::check_flag(flags, 1);
     report.pressure_valid = protocol::check_flag(flags, 16);
     report.temperature_valid = protocol::check_flag(flags, 17);
 
-    report.serial_number = protocol::pop_front<std::uint32_t>(data);
+    report.serial_number = protocol::pop<std::uint32_t>(data);
 
-    protocol::erase_bytes(data, 4);  // wtf are they doing with these spare bytes smh...
+    protocol::erase(data, 4);  // wtf are they doing with these spare bytes smh...
 
-    report.speed_of_sound = protocol::pop_front<float>(data);
-    report.temperature = protocol::pop_front<float>(data);
-    report.pressure = protocol::pop_front<float>(data);
-    report.distance = protocol::pop_front<float>(data);
+    report.speed_of_sound = protocol::pop<float>(data);
+    report.temperature = protocol::pop<float>(data);
+    report.pressure = protocol::pop<float>(data);
+    report.distance = protocol::pop<float>(data);
   }
 };
 
-struct adl_serializer<FieldCalibrationReport>
+template <>
+struct Serializer<FieldCalibrationReport>
 {
-  static void from_data(const std::vector<std::uint8_t> & data, FieldCalibrationReport & report)
+  static void from_data(std::vector<std::uint8_t> data, FieldCalibrationReport & report)
   {
     protocol::unpack_common_data(data, report);
-    protocol::erase_bytes(data, report.data_offset);  // field calibration data starts at offset
-    report.hard_iron_x = protocol::pop_front<float>(data);
-    report.hard_iron_y = protocol::pop_front<float>(data);
-    report.hard_iron_z = protocol::pop_front<float>(data);
+    protocol::erase(data, report.data_offset);  // field calibration data starts at offset
+    report.hard_iron_x = protocol::pop<float>(data);
+    report.hard_iron_y = protocol::pop<float>(data);
+    report.hard_iron_z = protocol::pop<float>(data);
 
-    report.soft_iron_matrix(0, 0) = protocol::pop_front<float>(data);
-    report.soft_iron_matrix(0, 1) = protocol::pop_front<float>(data);
-    report.soft_iron_matrix(0, 2) = protocol::pop_front<float>(data);
-    report.soft_iron_matrix(1, 0) = protocol::pop_front<float>(data);
-    report.soft_iron_matrix(1, 1) = protocol::pop_front<float>(data);
-    report.soft_iron_matrix(1, 2) = protocol::pop_front<float>(data);
-    report.soft_iron_matrix(2, 0) = protocol::pop_front<float>(data);
-    report.soft_iron_matrix(2, 1) = protocol::pop_front<float>(data);
-    report.soft_iron_matrix(2, 2) = protocol::pop_front<float>(data);
+    report.soft_iron_matrix(0, 0) = protocol::pop<float>(data);
+    report.soft_iron_matrix(0, 1) = protocol::pop<float>(data);
+    report.soft_iron_matrix(0, 2) = protocol::pop<float>(data);
+    report.soft_iron_matrix(1, 0) = protocol::pop<float>(data);
+    report.soft_iron_matrix(1, 1) = protocol::pop<float>(data);
+    report.soft_iron_matrix(1, 2) = protocol::pop<float>(data);
+    report.soft_iron_matrix(2, 0) = protocol::pop<float>(data);
+    report.soft_iron_matrix(2, 1) = protocol::pop<float>(data);
+    report.soft_iron_matrix(2, 2) = protocol::pop<float>(data);
 
-    protocol::erase_bytes(data, 3 * sizeof(float));  // spare bytes
+    protocol::erase(data, 3 * sizeof(float));  // spare bytes
 
-    report.fom = protocol::pop_front<float>(data);
+    report.fom = protocol::pop<float>(data);
   }
 };
 
-struct adl_serializer<FastPressureReport>
+template <>
+struct Serializer<FastPressureReport>
 {
-  static void from_data(const std::vector<std::uint8_t> & data, FastPressureReport & report)
+  static void from_data(std::vector<std::uint8_t> data, FastPressureReport & report)
   {
     protocol::unpack_common_data(data, report);
-    protocol::erase_bytes(data, report.data_offset);  // fast pressure data starts at offset
-    report.pressure = protocol::pop_front<float>(data);
+    protocol::erase(data, report.data_offset);  // fast pressure data starts at offset
+    report.pressure = protocol::pop<float>(data);
   }
 };
 
-struct adl_serializer<VelocityReport>
+template <>
+struct Serializer<VelocityReport>
 {
-  static void from_data(const std::vector<std::uint8_t> & data, VelocityReport & report)
+  static void from_data(std::vector<std::uint8_t> data, VelocityReport & report)
   {
     protocol::unpack_common_data(data, report);
 
     // there is no offset for this report type
-    protocol::erase_bytes(data, 12);  // velocity data starts after 12 bytes
+    protocol::erase(data, 12);  // velocity data starts after 12 bytes
 
-    const auto flags = protocol::pop_front<std::uint32_t>(data);
+    const auto flags = protocol::pop<std::uint32_t>(data);
     report.transducer_reports[0].velocity_valid = protocol::check_flag(flags, 0);
     report.transducer_reports[1].velocity_valid = protocol::check_flag(flags, 1);
     report.transducer_reports[2].velocity_valid = protocol::check_flag(flags, 2);
@@ -606,47 +617,48 @@ struct adl_serializer<VelocityReport>
     bool covariance_zz_valid = protocol::check_flag(flags, 14);
     report.covariance_valid = covariance_xx_valid && covariance_yy_valid && covariance_zz_valid;
 
-    report.serial_number = protocol::pop_front<std::uint32_t>(data);
+    report.serial_number = protocol::pop<std::uint32_t>(data);
 
-    protocol::erase_bytes(data, 4);  // spare bytes
+    protocol::erase(data, 4);  // spare bytes
 
-    report.speed_of_sound = protocol::pop_front<float>(data);
-    report.temperature = protocol::pop_front<float>(data);
-    report.pressure = protocol::pop_front<float>(data);
+    report.speed_of_sound = protocol::pop<float>(data);
+    report.temperature = protocol::pop<float>(data);
+    report.pressure = protocol::pop<float>(data);
 
-    report.transducer_reports[0].velocity = protocol::pop_front<float>(data);
-    report.transducer_reports[1].velocity = protocol::pop_front<float>(data);
-    report.transducer_reports[2].velocity = protocol::pop_front<float>(data);
+    report.transducer_reports[0].velocity = protocol::pop<float>(data);
+    report.transducer_reports[1].velocity = protocol::pop<float>(data);
+    report.transducer_reports[2].velocity = protocol::pop<float>(data);
 
-    report.transducer_reports[0].distance = protocol::pop_front<float>(data);
-    report.transducer_reports[1].distance = protocol::pop_front<float>(data);
-    report.transducer_reports[2].distance = protocol::pop_front<float>(data);
+    report.transducer_reports[0].distance = protocol::pop<float>(data);
+    report.transducer_reports[1].distance = protocol::pop<float>(data);
+    report.transducer_reports[2].distance = protocol::pop<float>(data);
 
-    report.transducer_reports[0].std = protocol::pop_front<float>(data);
-    report.transducer_reports[1].std = protocol::pop_front<float>(data);
-    report.transducer_reports[2].std = protocol::pop_front<float>(data);
+    report.transducer_reports[0].std = protocol::pop<float>(data);
+    report.transducer_reports[1].std = protocol::pop<float>(data);
+    report.transducer_reports[2].std = protocol::pop<float>(data);
 
-    report.transducer_reports[0].time_delta = protocol::pop_front<float>(data);
-    report.transducer_reports[1].time_delta = protocol::pop_front<float>(data);
-    report.transducer_reports[2].time_delta = protocol::pop_front<float>(data);
+    report.transducer_reports[0].time_delta = protocol::pop<float>(data);
+    report.transducer_reports[1].time_delta = protocol::pop<float>(data);
+    report.transducer_reports[2].time_delta = protocol::pop<float>(data);
 
-    report.transducer_reports[0].time_velocity_estimate = protocol::pop_front<float>(data);
-    report.transducer_reports[1].time_velocity_estimate = protocol::pop_front<float>(data);
-    report.transducer_reports[2].time_velocity_estimate = protocol::pop_front<float>(data);
+    report.transducer_reports[0].time_velocity_estimate = protocol::pop<float>(data);
+    report.transducer_reports[1].time_velocity_estimate = protocol::pop<float>(data);
+    report.transducer_reports[2].time_velocity_estimate = protocol::pop<float>(data);
 
-    report.vx = protocol::pop_front<float>(data);
-    report.vy = protocol::pop_front<float>(data);
-    report.vz = protocol::pop_front<float>(data);
+    report.vx = protocol::pop<float>(data);
+    report.vy = protocol::pop<float>(data);
+    report.vz = protocol::pop<float>(data);
 
-    report.covariance(0, 0) = protocol::pop_front<float>(data);
-    report.covariance(1, 1) = protocol::pop_front<float>(data);
-    report.covariance(2, 2) = protocol::pop_front<float>(data);
+    report.covariance(0, 0) = protocol::pop<float>(data);
+    report.covariance(1, 1) = protocol::pop<float>(data);
+    report.covariance(2, 2) = protocol::pop<float>(data);
   }
 };
 
-struct adl_serializer<std::string>
+template <>
+struct Serializer<std::string>
 {
-  static void from_data(const std::vector<std::uint8_t> & data, std::string & response)
+  static void from_data(std::vector<std::uint8_t> data, std::string & response)
   {
     response = std::string(data.begin(), data.end());
   }

@@ -21,21 +21,35 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
+#include <vector>
 
-#include "libnortek/series_id.hpp"
+#include "libnucleus/family_id.hpp"
+#include "libnucleus/series_id.hpp"
 
 namespace nucleus
 {
+
+template <typename T>
+struct Serializer
+{
+  static void from_data(const std::vector<std::uint8_t> & /*data*/, T & /*value*/)
+  {
+    std::printf("No serializer defined for this type.\n");
+  }
+};
 
 class Packet
 {
 public:
   /// Create a new "binary data" packet given the series ID and data.
-  Packet(SeriesId id, std::vector<std::uint8_t> data);
+  Packet(SeriesId series_id, FamilyId family_id, std::vector<std::uint8_t> data);
 
   [[nodiscard]] auto series_id() const -> SeriesId;
 
-  [[nodiscard]] auto data() const -> const std::vector<std::uint8_t> &;
+  [[nodiscard]] auto family_id() const -> FamilyId;
+
+  [[nodiscard]] auto data() const -> std::vector<std::uint8_t>;
 
   [[nodiscard]] auto data_size() const -> std::size_t;
 
@@ -43,27 +57,24 @@ public:
   [[nodiscard]] auto get() -> T
   {
     T value;
-    adl_serializer<T>::from_data(data_, value);
+    Serializer<T>::from_data(data_, value);
     return value;
   }
 
 private:
   SeriesId series_id_;
+  FamilyId family_id_;
   std::vector<std::uint8_t> data_;
 };
 
-template <typename T, typename Serializer>
-struct adl_serializer
-{
-  static void from_data(const std::vector<std::uint8_t> & data, T & value) { Serializer::from_data(data, value); }
-}
-
 namespace protocol
 {
-  /// Sync byte used to identify the start of a Nortek Nucleus packet.
-  const std::uint8_t SYNC_BYTE = 0xA5;
+/// Sync byte used to identify the start of a Nortek Nucleus packet.
+const std::uint8_t SYNC_BYTE = 0xA5;
 
-  [[nodiscard]] inline auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet;
+[[nodiscard]] auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet;
+
+[[nodiscard]] auto decode_packets(const std::vector<std::uint8_t> & data) -> std::vector<Packet>;
 
 }  // namespace protocol
 

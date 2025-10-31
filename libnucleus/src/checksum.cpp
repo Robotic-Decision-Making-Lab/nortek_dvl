@@ -20,24 +20,38 @@
 
 #pragma once
 
+#include "checksum.hpp"
+
 #include <cstdint>
+#include <vector>
 
-namespace nucleus
+namespace nucleus::protocol
 {
 
-enum class SeriesId : std::uint8_t
+namespace
 {
-  IMU_DATA = 0x82,
-  MAGNETOMETER_DATA = 0x87,
-  FIELD_CALIBRATION_DATA = 0x8B,
-  FAST_PRESSURE_DATA = 0x96,
-  STRING_DATA = 0xA0,
-  ALTIMETER_DATA = 0xAA,
-  BOTTOM_TRACK_DATA = 0xB4,
-  WATER_TRACK_DATA = 0xBE,
-  CURRENT_PROFILER_DATA = 0xC0,
-  AHRS_DATA = 0xD2,
-  INS_DATA = 0xDC,
-};
 
+[[nodiscard]] auto calculate_checksum(const std::vector<std::uint8_t> & data) -> std::uint16_t
+{
+  std::uint16_t sum = 0xB58C;
+
+  for (std::size_t i = 0; i < data.size(); i += 2) {
+    const std::uint8_t u = data[i];
+    const std::uint8_t v = (i + 1 < data.size()) ? data[i + 1] : 0x00;
+
+    sum += static_cast<std::uint16_t>(u | (v << 8));
+    sum &= 0xFFFF;
+  }
+
+  return sum;
 }
+
+}  // namespace
+
+[[nodiscard]] auto checksum(const std::vector<std::uint8_t> & data, std::uint16_t expected_checksum) -> bool
+{
+  const auto calculated_checksum = calculate_checksum(data);
+  return calculated_checksum == expected_checksum;
+}
+
+}  // namespace nucleus::protocol

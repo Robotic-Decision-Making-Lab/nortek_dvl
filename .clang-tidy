@@ -25,7 +25,8 @@ Checks: >
   -clang-diagnostic-error,
   -bugprone-exception-escape,
   -misc-include-cleaner,
-  -bugprone-reserved-identifier
+  -bugprone-reserved-identifier,
+  -portability-avoid-pragma-once
 WarningsAsErrors: "*"
 CheckOptions:
   - key: readability-braces-around-statements.ShortStatementLines

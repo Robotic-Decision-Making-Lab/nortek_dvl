@@ -21,23 +21,12 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
-namespace nucleus
+namespace nucleus::protocol
 {
 
-enum class SeriesId : std::uint8_t
-{
-  IMU_DATA = 0x82,
-  MAGNETOMETER_DATA = 0x87,
-  FIELD_CALIBRATION_DATA = 0x8B,
-  FAST_PRESSURE_DATA = 0x96,
-  STRING_DATA = 0xA0,
-  ALTIMETER_DATA = 0xAA,
-  BOTTOM_TRACK_DATA = 0xB4,
-  WATER_TRACK_DATA = 0xBE,
-  CURRENT_PROFILER_DATA = 0xC0,
-  AHRS_DATA = 0xD2,
-  INS_DATA = 0xDC,
-};
+/// Verify the checksum of the given data against the expected checksum.
+[[nodiscard]] auto checksum(const std::vector<std::uint8_t> & data, std::uint16_t expected_checksum) -> bool;
 
-}
+}  // namespace nucleus::protocol
