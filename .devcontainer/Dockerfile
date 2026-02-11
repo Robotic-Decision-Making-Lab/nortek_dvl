@@ -52,20 +52,19 @@ RUN python3 -m venv --system-site-packages $VIRTUAL_ENV \
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install all ROS dependencies
-# RUN vcs import src < src/$PROJECT_NAME/ros2.repos
 WORKDIR $USER_WORKSPACE
-# RUN sudo apt-get -q update \
-#     && sudo apt-get -q -y upgrade \
-#     && rosdep update \
-#     && rosdep install -y --from-paths src --ignore-src --rosdistro ${ROS_DISTRO} \
-#     && sudo apt-get autoremove -y \
-#     && sudo apt-get clean -y \
-#     && sudo rm -rf /var/lib/apt/lists/*
+RUN sudo apt-get -q update \
+    && sudo apt-get -q -y upgrade \
+    && rosdep update \
+    && rosdep install -y --from-paths src --ignore-src --rosdistro ${ROS_DISTRO} \
+    && sudo apt-get autoremove -y \
+    && sudo apt-get clean -y \
+    && sudo rm -rf /var/lib/apt/lists/*
 
-# RUN . "/opt/ros/${ROS_DISTRO}/setup.sh" \
-#     && colcon build \
-#     && echo "source ${USER_WORKSPACE}/install/setup.bash" >> /home/$USERNAME/.bashrc \
-#     && echo "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then source /opt/ros/${ROS_DISTRO}/setup.bash; fi" >> /home/$USERNAME/.bashrc
+RUN . "/opt/ros/${ROS_DISTRO}/setup.sh" \
+    && colcon build \
+    && echo "source ${USER_WORKSPACE}/install/setup.bash" >> /home/$USERNAME/.bashrc \
+    && echo "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then source /opt/ros/${ROS_DISTRO}/setup.bash; fi" >> /home/$USERNAME/.bashrc
 
 # Install debugging/linting C++ packages
 RUN sudo apt-get -q update \

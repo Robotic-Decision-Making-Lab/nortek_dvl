@@ -1,4 +1,4 @@
-// Copyright 2025, Evan Palmer
+// Copyright 2026, Evan Palmer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -91,7 +91,7 @@ struct INSReport : AHRSReport
   // Pressure (Bar).
   float pressure;
 
-  // Hight above sea floor, as measured by the altimeter (m).
+  // Height above sea floor, as measured by the altimeter (m).
   float altitude;
 
   // Latitude (deg).

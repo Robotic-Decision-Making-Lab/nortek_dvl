@@ -1,4 +1,4 @@
-// Copyright 2025, Evan Palmer
+// Copyright 2026, Evan Palmer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,6 +30,7 @@
 #include <iostream>
 #include <ranges>
 #include <stdexcept>
+#include <utility>
 
 #include "libnucleus/packet.hpp"
 #include "libnucleus/report.hpp"
@@ -204,21 +205,23 @@ auto NucleusClient::send_command(const std::string & command, Mode required_mode
 
 auto NucleusClient::start_measurement() -> std::future<bool>
 {
+  auto future = send_command("START", Mode::COMMAND);
   mode_ = Mode::MEASUREMENT;
-  return send_command("START", Mode::COMMAND);
+  return future;
 }
 
 auto NucleusClient::stop_measurement() -> std::future<bool>
 {
+  auto future = send_command("STOP", Mode::MEASUREMENT);
   mode_ = Mode::COMMAND;
-  return send_command("STOP", Mode::MEASUREMENT);
+  return future;
 }
 
 auto NucleusClient::trigger() -> std::future<bool> { return send_command("TRIG", Mode::MEASUREMENT); }
 
 auto NucleusClient::start_field_calibration() -> std::future<bool> { return send_command("FIELDCAL", Mode::COMMAND); }
 
-auto NucleusClient::enable_fast_pressure(int sampling_rate = 10) -> std::future<bool>
+auto NucleusClient::enable_fast_pressure(int sampling_rate) -> std::future<bool>
 {
   const std::string command = std::format("SETFASTPRESSURE,EN=1,SR={}", sampling_rate);
   return send_command(command, Mode::COMMAND);
@@ -230,33 +233,33 @@ auto NucleusClient::disable_fast_pressure() -> std::future<bool>
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::save_settings(const std::string & settings = "ALL") -> std::future<bool>
+auto NucleusClient::save_settings(const std::string & settings) -> std::future<bool>
 {
   const std::string command = std::format("SAVE,{}", settings);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::revert_to_default_settings(const std::string & settings = "ALL") -> std::future<bool>
+auto NucleusClient::revert_to_default_settings(const std::string & settings) -> std::future<bool>
 {
   const std::string command = std::format("SETDEFAULT,{}", settings);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::restore_settings(const std::string & settings = "ALL") -> std::future<bool>
+auto NucleusClient::restore_settings(const std::string & settings) -> std::future<bool>
 {
   const std::string command = std::format("RESTORE,{}", settings);
   return send_command(command, Mode::COMMAND);
 }
 
 auto NucleusClient::set_mission_settings(
-  double offset = 9.5,
-  double longitude = 9999,
-  double latitude = 9999,
-  double declination = 0.0,
-  double range = 50.0,
-  double blanking_distance = 0.1,
-  double speed_of_sound = 1481,
-  double salinity = 35.0) -> std::future<bool>
+  double offset,
+  double longitude,
+  double latitude,
+  double declination,
+  double range,
+  double blanking_distance,
+  double speed_of_sound,
+  double salinity) -> std::future<bool>
 {
   const std::string command = std::format(
     "SETMISSION,POFF={:.2f},LONG={:.4f},LAT={:.4f},DECL={:.2f},RANGE={:.2f},BD={:.2f},SV={:.1f},SA={:.2f}",
@@ -507,9 +510,97 @@ auto NucleusClient::set_time() -> std::future<bool>
 
 auto NucleusClient::reboot() -> std::future<bool> { return send_command("REBOOT", Mode::COMMAND); }
 
-auto NucleusClient::get_error() -> std::future<std::string>
+// auto NucleusClient::get_error() -> std::future<std::string>
+// {
+//   // TODO(evan-palmer): maybe implement this
+// }
+
+auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
 {
-  // TODO(evan-palmer): maybe implement this
+  auto dispatch_report = [this](const auto & report) -> void {
+    std::lock_guard lock(callback_mutex_);
+    auto it = callbacks_.find(typeid(report));
+    if (it != callbacks_.end()) {
+      for (const auto & callback : it->second) {
+        callback(&report);
+      }
+    }
+  };
+
+  switch (packet.series_id()) {
+    case SeriesId::IMU_DATA:
+      dispatch_report(packet.get<IMUReport>());
+      break;
+    case SeriesId::MAGNETOMETER_DATA:
+      dispatch_report(packet.get<MagnetometerReport>());
+      break;
+    case SeriesId::FIELD_CALIBRATION_DATA:
+      dispatch_report(packet.get<FieldCalibrationReport>());
+      break;
+    case SeriesId::FAST_PRESSURE_DATA:
+      dispatch_report(packet.get<FastPressureReport>());
+      break;
+    case SeriesId::STRING_DATA:
+      dispatch_report(packet.get<std::string>());
+      break;
+    case SeriesId::ALTIMETER_DATA:
+      dispatch_report(packet.get<AltimeterReport>());
+      break;
+    case SeriesId::BOTTOM_TRACK_DATA:
+      dispatch_report(packet.get<VelocityReport>());
+      break;
+    case SeriesId::WATER_TRACK_DATA:
+      dispatch_report(packet.get<VelocityReport>());
+      break;
+    case SeriesId::CURRENT_PROFILER_DATA:
+      // TODO(evan-palmer): figure out whether or not this is actually used
+      break;
+    case SeriesId::AHRS_DATA:
+      dispatch_report(packet.get<AHRSReport>());
+      break;
+    case SeriesId::INS_DATA:
+      dispatch_report(packet.get<INSReport>());
+      break;
+    default:
+      const auto id = std::to_string(std::to_underlying(packet.series_id()));
+      throw std::runtime_error("Received a packet with an unknown series ID: " + id);
+  }
+}
+
+auto NucleusClient::poll_connection() -> void
+{
+  // Maintain a queue to store incoming data
+  const std::size_t max_bytes_to_read = 2048;  // Reports can be quite large, so create a large buffer
+  std::deque<std::uint8_t> buffer;
+  std::size_t n_bytes_to_read = max_bytes_to_read;
+
+  while (running_.load()) {
+    if (read_from_socket(socket_, buffer, n_bytes_to_read) < 0) {
+      std::cout << "Failed to read from the DVL; the connection was likely lost.\n";
+    }
+
+    auto last_delim = std::ranges::find(buffer | std::views::reverse, protocol::SYNC_BYTE);
+
+    if (last_delim != buffer.rend()) {
+      try {
+        const std::vector<Packet> packets =
+          protocol::decode_packets(std::vector<std::uint8_t>(buffer.begin(), last_delim.base()));
+        if (!packets.empty()) {
+          for (const auto & report : packets) {
+            process_incoming_packet(report);
+          }
+        };
+
+        buffer.erase(buffer.begin(), last_delim.base());
+      }
+      catch (const std::exception & e) {
+        std::cout << "An error occurred while attempting to decode a DVL message: " << e.what() << "\n";
+        buffer.clear();
+      }
+    }
+
+    n_bytes_to_read = max_bytes_to_read - buffer.size();
+  }
 }
 
 }  // namespace nucleus

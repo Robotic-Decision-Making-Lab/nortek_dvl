@@ -1,4 +1,4 @@
-// Copyright 2025, Evan Palmer
+// Copyright 2026, Evan Palmer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -54,7 +54,7 @@ public:
   [[nodiscard]] auto data_size() const -> std::size_t;
 
   template <typename T>
-  [[nodiscard]] auto get() -> T
+  [[nodiscard]] auto get() const -> T
   {
     T value;
     Deserializer<T>::from_data(data_, value);

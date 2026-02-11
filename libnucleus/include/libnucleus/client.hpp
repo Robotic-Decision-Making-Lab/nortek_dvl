@@ -1,4 +1,4 @@
-// Copyright 2025, Evan Palmer
+// Copyright 2026, Evan Palmer
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,6 +30,8 @@
 #include <unordered_map>
 
 #include "libnucleus/mode.hpp"
+#include "libnucleus/packet.hpp"
+#include "libnucleus/series_id.hpp"
 
 namespace nucleus
 {
@@ -43,6 +45,8 @@ public:
     const std::string & addr,
     const std::string & password,
     std::chrono::seconds connection_timeout = std::chrono::seconds(5));
+
+  ~NucleusClient();
 
   /// Start measurement, data output, and data recording.
   ///
@@ -68,7 +72,7 @@ public:
   /// The triggered acoustic measurement will either be Bottom Track, Altimeter, or Current Profile. The type of
   /// measurement can be configured using the trigger settings.
   ///
-  /// INFO: This comand is only valid when the trigger source has been set to "COMMAND".
+  /// INFO: This command is only valid when the trigger source has been set to "COMMAND".
   /// INFO: This command has no effect if measurements have not been started.
   ///
   /// Command: TRIG
@@ -341,7 +345,7 @@ public:
 
   /// Set the altimeter power level (dB), in the range [-20, 0] dB.
   ///
-  /// To disable the altimeter transmition, set the power level to -100 dB.
+  /// To disable the altimeter transmission, set the power level to -100 dB.
   ///
   /// Command: SETALTI
   /// Command type: CONFIGURATION
@@ -509,7 +513,7 @@ public:
   /// Command: GETERROR
   /// Command type: INFO
   /// Mode: COMMAND
-  [[nodiscard]] auto get_error() -> std::future<std::string>;
+  // [[nodiscard]] auto get_error() -> std::future<std::string>;
 
   /// Register a callback function to receive reports of the specified type.
   ///
@@ -535,7 +539,7 @@ private:
   auto poll_connection() -> void;
 
   /// Process incoming data and dispatch to registered callbacks.
-  auto process_incoming_data() -> void;
+  auto process_incoming_packet(const Packet & packet) -> void;
 
   int socket_;
 
