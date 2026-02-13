@@ -53,7 +53,7 @@ auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet
     throw std::invalid_argument("Cannot decode an empty byte stream.");
   }
 
-  const std::uint8_t header_size = data[0];
+  const std::uint8_t header_size = data[1];
   if (data.size() < header_size) {
     throw std::invalid_argument("Data size is smaller than the specified header size.");
   }
@@ -61,24 +61,23 @@ auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet
   const std::vector<std::uint8_t> header_data = {data.begin(), data.begin() + header_size};
   const std::vector<std::uint8_t> packet_data = {data.begin() + header_size, data.end()};
 
-  const std::uint8_t series_id = data[1];
-  const std::uint8_t family_id = data[2];  // we don't use the family ID
-  const std::uint16_t data_size = (data[3] | (data[4] << 8)) - 1;
-  const std::uint16_t data_checksum = data[5] | (data[6] << 8);
-  const std::uint16_t header_checksum = data[7] | (data[8] << 8);
+  const std::uint8_t series_id = header_data[2];
+  const std::uint8_t family_id = header_data[3];
+  const std::uint16_t data_size = (header_data[4] | (static_cast<std::uint16_t>(header_data[5]) << 8));
+  const std::uint16_t data_checksum = header_data[6] | (static_cast<std::uint16_t>(header_data[7]) << 8);
+  const std::uint16_t header_checksum = header_data[8] | (static_cast<std::uint16_t>(header_data[9]) << 8);
 
-  // printf("decoded packet with size: %zu, series ID: %u, family ID: %u\n", packet_data.size(), series_id, family_id);
   if (packet_data.size() != data_size) {
     throw std::invalid_argument("Data size does not match the size specified in the header.");
   }
 
-  // if (!protocol::checksum(header_data, header_checksum)) {
-  //   throw std::invalid_argument("Header checksum does not match the calculated checksum.");
-  // }
+  if (!protocol::checksum({header_data.begin(), header_data.end() - 2}, header_checksum)) {
+    throw std::invalid_argument("Header checksum does not match the calculated checksum.");
+  }
 
-  // if (!protocol::checksum(packet_data, data_checksum)) {
-  //   throw std::invalid_argument("Data checksum does not match the calculated checksum.");
-  // }
+  if (!protocol::checksum(packet_data, data_checksum)) {
+    throw std::invalid_argument("Data checksum does not match the calculated checksum.");
+  }
 
   return {static_cast<SeriesId>(series_id), static_cast<FamilyId>(family_id), packet_data};
 }
@@ -92,17 +91,12 @@ auto decode_packets(const std::vector<std::uint8_t> & data) -> std::vector<Packe
   std::vector<Packet> packets;
 
   auto start = data.begin();
-  auto iter = std::find_if(start, data.end(), [](const std::uint8_t & b) -> bool { return b == protocol::SYNC_BYTE; });
+  auto iter = std::find(start, data.end(), protocol::SYNC_BYTE);
 
   while (iter != data.end()) {
+    start = iter;
+    iter = std::find(start + 1, data.end(), protocol::SYNC_BYTE);
     const std::vector<std::uint8_t> packet_data(start, iter);
-
-    start = iter + 1;
-    iter = std::find_if(start, data.end(), [](const std::uint8_t & b) -> bool { return b == protocol::SYNC_BYTE; });
-
-    if (packet_data.empty()) {
-      continue;
-    }
 
     try {
       const Packet packet = decode_packet(packet_data);

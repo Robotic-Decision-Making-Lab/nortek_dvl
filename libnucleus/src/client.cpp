@@ -56,19 +56,19 @@ auto read_from_socket(
     return rc;
   }
 
-  if ((pfds[0].revents & POLLIN) != 0) {
-    std::vector<std::uint8_t> data(n_bytes);
-    const ssize_t n_read = recv(socket, data.data(), data.size(), 0);
+  if (((pfds[0].revents & POLLIN) == 0)) {
+    return 0;
+  }
 
-    if (n_read < 0) {
-      return n_read;
-    }
+  std::vector<std::uint8_t> data(n_bytes);
+  const ssize_t n_read = recv(socket, data.data(), data.size(), 0);
 
-    std::ranges::copy(data | std::views::take(n_read), std::back_inserter(buffer));
+  if (n_read < 0) {
     return n_read;
   }
 
-  return 0;
+  std::ranges::copy(data | std::views::take(n_read), std::back_inserter(buffer));
+  return n_read;
 }
 
 /// Establish a connection to a socket with a timeout. Returns 0 on success, -1 on failure.
@@ -527,7 +527,7 @@ auto NucleusClient::reboot() -> std::future<bool> { return send_command("REBOOT"
 
 // auto NucleusClient::get_error() -> std::future<std::string>
 // {
-//   // TODO(evan-palmer): maybe implement this
+//   // TODO(evan-palmer): maybe implement this??
 // }
 
 auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
@@ -594,13 +594,6 @@ auto NucleusClient::poll_connection() -> void
       std::cout << "Failed to read from the DVL; the connection was likely lost.\n";
     }
     auto last_delim = std::ranges::find(buffer | std::views::reverse, protocol::SYNC_BYTE);
-
-    // for (const auto & byte : buffer) {
-    //   printf("%02x ", byte);
-    // }
-    // printf("\n");
-
-    // printf("found last delim at index %zu\n", std::distance(buffer.begin(), last_delim.base()) - 1);
 
     if (last_delim != buffer.rend()) {
       try {

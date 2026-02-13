@@ -36,9 +36,12 @@ namespace
 
   for (std::size_t i = 0; i < data.size(); i += 2) {
     const std::uint8_t u = data[i];
-    const std::uint8_t v = (i + 1 < data.size()) ? data[i + 1] : 0x00;
-
-    sum += static_cast<std::uint16_t>(u | (v << 8));
+    if (i + 1 < data.size()) {
+      const std::uint8_t v = data[i + 1];
+      sum += static_cast<std::uint16_t>(u | (v << 8));
+    } else {
+      sum += static_cast<std::uint16_t>(u << 8);
+    }
     sum &= 0xFFFF;
   }
 
@@ -50,7 +53,6 @@ namespace
 [[nodiscard]] auto checksum(const std::vector<std::uint8_t> & data, std::uint16_t expected_checksum) -> bool
 {
   const auto calculated_checksum = calculate_checksum(data);
-  printf("calculated checksum: 0x%04X, expected checksum: 0x%04X\n", calculated_checksum, expected_checksum);
   return calculated_checksum == expected_checksum;
 }
 
