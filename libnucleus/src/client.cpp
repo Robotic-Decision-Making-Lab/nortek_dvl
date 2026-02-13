@@ -191,6 +191,7 @@ NucleusClient::NucleusClient(
 
 NucleusClient::~NucleusClient()
 {
+  auto null = stop_measurement();
   running_.store(false);
 
   if (polling_thread_.joinable()) {
@@ -532,6 +533,7 @@ auto NucleusClient::reboot() -> std::future<bool> { return send_command("REBOOT"
 
 auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
 {
+  // printf("processing callback\n");
   auto dispatch_report = [this](const auto & report) -> void {
     std::lock_guard lock(callback_mutex_);
     auto it = callbacks_.find(typeid(report));
@@ -574,7 +576,7 @@ auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
       dispatch_report(packet.get<AHRSReport>());
       break;
     case SeriesId::INS_DATA:
-      dispatch_report(packet.get<INSReport>());
+      // dispatch_report(packet.get<INSReport>()); // BUG HERE!
       break;
     default:
       const auto id = std::to_string(std::to_underlying(packet.series_id()));
@@ -594,8 +596,9 @@ auto NucleusClient::poll_connection() -> void
       std::cout << "Failed to read from the DVL; the connection was likely lost.\n";
     }
     auto last_delim = std::ranges::find(buffer | std::views::reverse, protocol::SYNC_BYTE);
+    auto last_sync_it = std::prev(last_delim.base());
 
-    if (last_delim != buffer.rend()) {
+    if ((last_delim + 1) != buffer.rend()) {
       try {
         const std::vector<Packet> packets =
           protocol::decode_packets(std::vector<std::uint8_t>(buffer.begin(), last_delim.base()));
@@ -605,7 +608,7 @@ auto NucleusClient::poll_connection() -> void
           }
         };
 
-        buffer.erase(buffer.begin(), last_delim.base());
+        buffer.erase(buffer.begin(), last_sync_it);
       }
       catch (const std::exception & e) {
         std::cout << "An error occurred while attempting to decode a DVL message: " << e.what() << "\n";

@@ -91,11 +91,12 @@ auto decode_packets(const std::vector<std::uint8_t> & data) -> std::vector<Packe
   std::vector<Packet> packets;
 
   auto start = data.begin();
-  auto iter = std::find(start, data.end(), protocol::SYNC_BYTE);
+  auto iter = std::ranges::find(data, protocol::SYNC_BYTE);
 
-  while (iter != data.end()) {
+  while ((iter + 1) != data.end()) {
     start = iter;
-    iter = std::find(start + 1, data.end(), protocol::SYNC_BYTE);
+    iter = std::ranges::find(start + 1, data.end(), protocol::SYNC_BYTE);
+
     const std::vector<std::uint8_t> packet_data(start, iter);
 
     try {
