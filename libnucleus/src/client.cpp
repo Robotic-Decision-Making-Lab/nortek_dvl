@@ -43,17 +43,32 @@ namespace
 {
 
 /// Read n_bytes from a socket and append them to a queue.
-auto read_from_socket(int socket, std::deque<std::uint8_t> & buffer, std::size_t n_bytes) -> ssize_t
+auto read_from_socket(
+  int socket,
+  std::deque<std::uint8_t> & buffer,
+  std::size_t n_bytes,
+  std::chrono::milliseconds timeout = std::chrono::milliseconds(1000)) -> ssize_t
 {
-  std::vector<std::uint8_t> data(n_bytes);
-  const ssize_t n_read = recv(socket, data.data(), n_bytes, 0);
+  struct pollfd pfds[] = {{.fd = socket, .events = POLLIN, .revents = 0}};  // NOLINT
+  const int rc = poll(pfds, 1, timeout.count());
 
-  if (n_read < 0) {
+  if (rc < 0) {
+    return rc;
+  }
+
+  if ((pfds[0].revents & POLLIN) != 0) {
+    std::vector<std::uint8_t> data(n_bytes);
+    const ssize_t n_read = recv(socket, data.data(), data.size(), 0);
+
+    if (n_read < 0) {
+      return n_read;
+    }
+
+    std::ranges::copy(data | std::views::take(n_read), std::back_inserter(buffer));
     return n_read;
   }
 
-  std::ranges::copy(data | std::views::take(n_read), std::back_inserter(buffer));
-  return n_read;
+  return 0;
 }
 
 /// Establish a connection to a socket with a timeout. Returns 0 on success, -1 on failure.
@@ -116,8 +131,8 @@ auto connect(int socket, const struct sockaddr * addr, socklen_t addrlen, std::c
     }
   }
 
-  // Restore the original socket flags
-  return set_socket_flags(socket, flags) < 0 ? -1 : rc;
+  // keep the socket in non-blocking mode
+  return rc;
 }
 
 auto open(const std::string & addr, std::uint16_t port, std::chrono::seconds connection_timeout) -> int
@@ -151,7 +166,7 @@ auto open(const std::string & addr, std::uint16_t port, std::chrono::seconds con
 NucleusClient::NucleusClient(const std::string & addr, std::chrono::seconds connection_timeout)
 {
   // Open a TCP socket and connect to the DVL
-  socket_ = open(addr, 9000, connection_timeout);  // connect to the data-only port
+  socket_ = open(addr, 9002, connection_timeout);  // connect to the data-only port
   running_.store(true);
   polling_thread_ = std::thread([this] -> void { poll_connection(); });
 }
@@ -163,7 +178,7 @@ NucleusClient::NucleusClient(
 : command_interface_available_{true}
 {
   // Open a TCP socket and connect to the DVL
-  socket_ = open(addr, 9002, connection_timeout);  // connect to the primary port
+  socket_ = open(addr, 9000, connection_timeout);  // connect to the primary port
 
   // Login to the DVL
   if (!protocol::login(socket_, password)) {
@@ -570,7 +585,7 @@ auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
 auto NucleusClient::poll_connection() -> void
 {
   // Maintain a queue to store incoming data
-  const std::size_t max_bytes_to_read = 2048;  // Reports can be quite large, so create a large buffer
+  const std::size_t max_bytes_to_read = 4096;  // Reports can be quite large, so create a large buffer
   std::deque<std::uint8_t> buffer;
   std::size_t n_bytes_to_read = max_bytes_to_read;
 
@@ -578,8 +593,14 @@ auto NucleusClient::poll_connection() -> void
     if (read_from_socket(socket_, buffer, n_bytes_to_read) < 0) {
       std::cout << "Failed to read from the DVL; the connection was likely lost.\n";
     }
-
     auto last_delim = std::ranges::find(buffer | std::views::reverse, protocol::SYNC_BYTE);
+
+    // for (const auto & byte : buffer) {
+    //   printf("%02x ", byte);
+    // }
+    // printf("\n");
+
+    // printf("found last delim at index %zu\n", std::distance(buffer.begin(), last_delim.base()) - 1);
 
     if (last_delim != buffer.rend()) {
       try {

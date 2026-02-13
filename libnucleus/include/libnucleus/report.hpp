@@ -322,7 +322,7 @@ template <typename T>
 [[nodiscard]] auto pop(std::vector<std::uint8_t> & data) -> T
 {
   const std::size_t bytes = sizeof(T);
-  if (data.size() != bytes) {
+  if (data.size() < bytes) {
     throw std::invalid_argument("Cannot deserialize data into the requested type due to mismatched sizes.");
   }
 

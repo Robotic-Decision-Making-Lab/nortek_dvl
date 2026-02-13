@@ -21,6 +21,7 @@
 #include "checksum.hpp"
 
 #include <cstdint>
+#include <iostream>
 #include <vector>
 
 namespace nucleus::protocol
@@ -49,6 +50,7 @@ namespace
 [[nodiscard]] auto checksum(const std::vector<std::uint8_t> & data, std::uint16_t expected_checksum) -> bool
 {
   const auto calculated_checksum = calculate_checksum(data);
+  printf("calculated checksum: 0x%04X, expected checksum: 0x%04X\n", calculated_checksum, expected_checksum);
   return calculated_checksum == expected_checksum;
 }
 

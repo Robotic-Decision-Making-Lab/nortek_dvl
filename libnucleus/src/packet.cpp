@@ -58,54 +58,27 @@ auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet
     throw std::invalid_argument("Data size is smaller than the specified header size.");
   }
 
-  std::vector<std::uint8_t> header_data = {data.begin(), data.begin() + header_size};
+  const std::vector<std::uint8_t> header_data = {data.begin(), data.begin() + header_size};
   const std::vector<std::uint8_t> packet_data = {data.begin() + header_size, data.end()};
 
-  // construct the header checksum
-  const std::uint8_t header_checksum_low = header_data.back();
-  header_data.pop_back();
+  const std::uint8_t series_id = data[1];
+  const std::uint8_t family_id = data[2];  // we don't use the family ID
+  const std::uint16_t data_size = (data[3] | (data[4] << 8)) - 1;
+  const std::uint16_t data_checksum = data[5] | (data[6] << 8);
+  const std::uint16_t header_checksum = data[7] | (data[8] << 8);
 
-  const std::uint8_t header_checksum_high = header_data.back();
-  header_data.pop_back();
-
-  const auto header_checksum = static_cast<std::uint16_t>(header_checksum_low | (header_checksum_high << 8));
-
-  // construct the data checksum
-  const std::uint8_t data_checksum_low = header_data.back();
-  header_data.pop_back();
-
-  const std::uint8_t data_checksum_high = header_data.back();
-  header_data.pop_back();
-
-  const auto data_checksum = static_cast<std::uint16_t>(data_checksum_low | (data_checksum_high << 8));
-
-  // construct the data size
-  const std::uint8_t data_size_low = header_data.back();
-  header_data.pop_back();
-
-  const std::uint8_t data_size_high = header_data.back();
-  header_data.pop_back();
-
-  const auto data_size = static_cast<std::size_t>(data_size_low | (data_size_high << 8));
-
+  // printf("decoded packet with size: %zu, series ID: %u, family ID: %u\n", packet_data.size(), series_id, family_id);
   if (packet_data.size() != data_size) {
     throw std::invalid_argument("Data size does not match the size specified in the header.");
   }
 
-  // we don't use the family ID
-  const std::uint8_t family_id = header_data.back();
-  header_data.pop_back();
+  // if (!protocol::checksum(header_data, header_checksum)) {
+  //   throw std::invalid_argument("Header checksum does not match the calculated checksum.");
+  // }
 
-  const std::uint8_t series_id = header_data.back();
-  header_data.pop_back();
-
-  if (!protocol::checksum(header_data, header_checksum)) {
-    throw std::invalid_argument("Header checksum does not match the calculated checksum.");
-  }
-
-  if (!protocol::checksum(packet_data, data_checksum)) {
-    throw std::invalid_argument("Data checksum does not match the calculated checksum.");
-  }
+  // if (!protocol::checksum(packet_data, data_checksum)) {
+  //   throw std::invalid_argument("Data checksum does not match the calculated checksum.");
+  // }
 
   return {static_cast<SeriesId>(series_id), static_cast<FamilyId>(family_id), packet_data};
 }

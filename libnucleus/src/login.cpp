@@ -20,9 +20,13 @@
 
 #include "login.hpp"
 
+#include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <chrono>
+#include <iostream>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 
@@ -32,26 +36,36 @@ namespace nucleus::protocol
 namespace
 {
 
-auto read(int socket) -> std::string
+auto read(int socket, std::chrono::milliseconds timeout = std::chrono::milliseconds(1000)) -> std::string
 {
   std::string line;
-  char ch;
 
   while (true) {
-    const ssize_t n_read = recv(socket, &ch, 1, 0);
-
-    if (n_read <= 0) {
-      throw std::runtime_error("Failed to read from socket during login.");
-    }
-
-    if (ch == '\n') {
-      if (!line.empty() && line.back() == '\r') {
-        line.pop_back();  // Remove \r if present
-      }
+    if (line.contains("\r\n")) {
       return line;
     }
 
-    line += ch;
+    struct pollfd pfds[] = {{.fd = socket, .events = POLLIN, .revents = 0}};  // NOLINT
+    const int rc = poll(pfds, 1, timeout.count());
+
+    if (rc < 0) {
+      throw std::runtime_error("An error occurred while attempting to read from the socket during login.");
+    }
+
+    if (rc == 0) {
+      return line;  // return what we have so far on timeout
+    }
+
+    if ((pfds[0].revents & POLLIN) != 0) {
+      std::vector<std::uint8_t> buffer(4096);
+      const ssize_t n_read = recv(socket, buffer.data(), buffer.size(), 0);
+
+      if (n_read < 0) {
+        throw std::runtime_error("An error occurred while attempting to read from the socket during login.");
+      }
+
+      std::ranges::copy(buffer | std::views::take(n_read), std::back_inserter(line));
+    }
   }
 }
 

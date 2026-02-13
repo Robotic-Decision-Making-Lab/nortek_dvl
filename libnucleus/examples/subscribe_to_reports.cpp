@@ -26,13 +26,12 @@
 
 auto main() -> int
 {
-  nucleus::NucleusClient client("192.168.2.3", "password");
+  nucleus::NucleusClient client("192.168.2.201", "nortek");
+  auto future = client.start_measurement();
 
   client.subscribe<nucleus::VelocityReport>([](const nucleus::VelocityReport & report) -> void {
     std::cout << std::format("Traveling at velocity: vx={}, vy={}, vz={}.\n", report.vx, report.vy, report.vz);
   });
-
-  auto future = client.start_measurement();
 
   // Let the driver run indefinitely
   while (true) {
