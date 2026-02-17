@@ -21,6 +21,7 @@
 #include "libnucleus/packet.hpp"
 
 #include <algorithm>
+#include <iostream>
 #include <stdexcept>
 #include <vector>
 
@@ -53,9 +54,17 @@ auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet
     throw std::invalid_argument("Cannot decode an empty byte stream.");
   }
 
+  if (data.size() < 2) {
+    throw std::invalid_argument("Data does not contain a valid header.");
+  }
+
   const std::uint8_t header_size = data[1];
   if (data.size() < header_size) {
     throw std::invalid_argument("Data size is smaller than the specified header size.");
+  }
+
+  if (header_size < 10) {
+    throw std::invalid_argument("Header size is too small to contain required fields.");
   }
 
   const std::vector<std::uint8_t> header_data = {data.begin(), data.begin() + header_size};
@@ -93,11 +102,11 @@ auto decode_packets(const std::vector<std::uint8_t> & data) -> std::vector<Packe
   auto start = data.begin();
   auto iter = std::ranges::find(data, protocol::SYNC_BYTE);
 
-  while ((iter + 1) != data.end()) {
+  while (iter != data.end()) {
     start = iter;
-    iter = std::ranges::find(start + 1, data.end(), protocol::SYNC_BYTE);
+    auto next = std::ranges::find(start + 1, data.end(), protocol::SYNC_BYTE);
 
-    const std::vector<std::uint8_t> packet_data(start, iter);
+    const std::vector<std::uint8_t> packet_data(start, next);
 
     try {
       const Packet packet = decode_packet(packet_data);
@@ -106,6 +115,7 @@ auto decode_packets(const std::vector<std::uint8_t> & data) -> std::vector<Packe
     catch (const std::exception & e) {  // NOLINT(bugprone-empty-catch)
       // skip invalid packets (usually just incomplete packets) - we don't log here to avoid spamming the user
     }
+    iter = next;
   }
 
   return packets;

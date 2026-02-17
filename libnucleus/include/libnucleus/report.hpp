@@ -327,10 +327,11 @@ template <typename T>
   }
 
   // this isn't efficient, but the data rates are low enough that it shouldn't matter
-  auto popped = data | std::views::take(bytes);
+  T result;
+  std::memcpy(&result, data.data(), bytes);
   erase(data, bytes);
 
-  return *reinterpret_cast<const T *>(popped.data());
+  return result;
 }
 
 /// Unpack the common data fields from the beginning of a data vector.

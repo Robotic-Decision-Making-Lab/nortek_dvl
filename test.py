@@ -12,8 +12,7 @@ for _ in range(100):
     packet = driver.read_packet(timeout=1, _suppress_warning=True)
     if packet is None:
         print("No packet received within timeout.")
-    if packet["id"] == 190:
-        print(packet["velocityX"], packet["velocityY"], packet["velocityZ"])
+    print(packet["id"])
 driver.stop()
 
 driver.disconnect()

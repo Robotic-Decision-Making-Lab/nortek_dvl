@@ -533,7 +533,6 @@ auto NucleusClient::reboot() -> std::future<bool> { return send_command("REBOOT"
 
 auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
 {
-  // printf("processing callback\n");
   auto dispatch_report = [this](const auto & report) -> void {
     std::lock_guard lock(callback_mutex_);
     auto it = callbacks_.find(typeid(report));
@@ -576,7 +575,7 @@ auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
       dispatch_report(packet.get<AHRSReport>());
       break;
     case SeriesId::INS_DATA:
-      // dispatch_report(packet.get<INSReport>()); // BUG HERE!
+      dispatch_report(packet.get<INSReport>());
       break;
     default:
       const auto id = std::to_string(std::to_underlying(packet.series_id()));
@@ -587,33 +586,43 @@ auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
 auto NucleusClient::poll_connection() -> void
 {
   // Maintain a queue to store incoming data
-  const std::size_t max_bytes_to_read = 4096;  // Reports can be quite large, so create a large buffer
+  const std::size_t max_bytes_to_read = 2048;  // Reports can be quite large, so create a large buffer
   std::deque<std::uint8_t> buffer;
   std::size_t n_bytes_to_read = max_bytes_to_read;
 
   while (running_.load()) {
-    if (read_from_socket(socket_, buffer, n_bytes_to_read) < 0) {
+    const auto n_read = read_from_socket(socket_, buffer, n_bytes_to_read);
+    if (n_read < 0) {
       std::cout << "Failed to read from the DVL; the connection was likely lost.\n";
     }
-    auto last_delim = std::ranges::find(buffer | std::views::reverse, protocol::SYNC_BYTE);
-    auto last_sync_it = std::prev(last_delim.base());
 
-    if ((last_delim + 1) != buffer.rend()) {
+    auto first_delim = std::ranges::find(buffer, protocol::SYNC_BYTE);
+    auto last_delim = std::ranges::find(buffer | std::views::reverse, protocol::SYNC_BYTE);
+
+    if (
+      first_delim != buffer.end() && last_delim != std::ranges::end(buffer | std::views::reverse) &&
+      first_delim != std::prev(last_delim.base())) {
+      const auto last = std::prev(last_delim.base());
       try {
-        const std::vector<Packet> packets =
-          protocol::decode_packets(std::vector<std::uint8_t>(buffer.begin(), last_delim.base()));
+        const auto window = std::vector<std::uint8_t>(first_delim, last);
+        const std::vector<Packet> packets = protocol::decode_packets(window);
+
         if (!packets.empty()) {
           for (const auto & report : packets) {
             process_incoming_packet(report);
           }
         };
 
-        buffer.erase(buffer.begin(), last_sync_it);
+        buffer.erase(buffer.begin(), last);
       }
       catch (const std::exception & e) {
         std::cout << "An error occurred while attempting to decode a DVL message: " << e.what() << "\n";
         buffer.clear();
       }
+    }
+
+    if (buffer.size() > max_bytes_to_read) {
+      buffer.clear();
     }
 
     n_bytes_to_read = max_bytes_to_read - buffer.size();
