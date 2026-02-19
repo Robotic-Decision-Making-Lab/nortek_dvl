@@ -19,7 +19,7 @@ add_library(libnucleus SHARED)
 
 target_sources(
     libnucleus
-    PRIVATE src/checksum.cpp src/client.cpp src/login.cpp src/packet.cpp
+    PRIVATE src/checksum.cpp src/client.cpp src/login.cpp src/packet.cpp src/ascii.cpp
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -31,6 +31,7 @@ target_sources(
             ${CMAKE_CURRENT_SOURCE_DIR}/include/libnucleus/report.hpp
             ${CMAKE_CURRENT_SOURCE_DIR}/include/libnucleus/series_id.hpp
             ${CMAKE_CURRENT_SOURCE_DIR}/include/libnucleus/version.hpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/include/libnucleus/response.hpp
 )
 target_compile_features(libnucleus PUBLIC cxx_std_23)
 target_link_libraries(libnucleus PUBLIC Eigen3::Eigen)

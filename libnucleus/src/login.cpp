@@ -30,6 +30,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "ascii.hpp"
+
 namespace nucleus::protocol
 {
 
@@ -41,7 +43,7 @@ auto read(int socket, std::chrono::milliseconds timeout = std::chrono::milliseco
   std::string line;
 
   while (true) {
-    if (line.contains("\r\n")) {
+    if (line.contains(DELIMITER)) {
       return line;
     }
 

@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <ranges>
 #include <stdexcept>
 #include <vector>
 
@@ -29,6 +30,21 @@
 
 namespace nucleus
 {
+
+namespace
+{
+
+auto calculate_packet_size(const std::vector<std::uint8_t> & data) -> std::size_t
+{
+  if (data.size() < 6) {
+    throw std::invalid_argument("Data size is too small to contain a valid packet.");
+  }
+  const std::uint8_t header_size = data[1];
+  const std::uint16_t data_size = (data[4] | (static_cast<std::uint16_t>(data[5]) << 8));
+  return header_size + data_size;
+}
+
+}  // namespace
 
 Packet::Packet(SeriesId series_id, FamilyId family_id, std::vector<std::uint8_t> data)
 : series_id_(series_id),
@@ -48,33 +64,31 @@ auto Packet::data_size() const -> std::size_t { return data_.size(); }
 namespace protocol
 {
 
+auto might_contain_packet(const std::deque<std::uint8_t> & data) -> bool
+{
+  // the absolute minimum amount of data that we need is 6 bytes; this allows us to check the header size and data size
+  if (data.size() < 6) {
+    return false;
+  }
+  return data.size() >= calculate_packet_size({data.begin(), data.end()});
+}
+
 auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet
 {
-  if (data.empty()) {
-    throw std::invalid_argument("Cannot decode an empty byte stream.");
+  if (data.size() < 10) {
+    throw std::invalid_argument("Data size is too small to contain a valid packet.");
   }
 
-  if (data.size() < 2) {
-    throw std::invalid_argument("Data does not contain a valid header.");
-  }
-
-  const std::uint8_t header_size = data[1];
-  if (data.size() < header_size) {
-    throw std::invalid_argument("Data size is smaller than the specified header size.");
-  }
-
-  if (header_size < 10) {
-    throw std::invalid_argument("Header size is too small to contain required fields.");
-  }
-
-  const std::vector<std::uint8_t> header_data = {data.begin(), data.begin() + header_size};
-  const std::vector<std::uint8_t> packet_data = {data.begin() + header_size, data.end()};
-
+  // don't ask me why nortek does this, just accept it and move on.
+  const std::vector<std::uint8_t> header_data = {data.begin(), data.begin() + 10};
+  const std::uint8_t header_size = header_data[1];
   const std::uint8_t series_id = header_data[2];
   const std::uint8_t family_id = header_data[3];
   const std::uint16_t data_size = (header_data[4] | (static_cast<std::uint16_t>(header_data[5]) << 8));
   const std::uint16_t data_checksum = header_data[6] | (static_cast<std::uint16_t>(header_data[7]) << 8);
   const std::uint16_t header_checksum = header_data[8] | (static_cast<std::uint16_t>(header_data[9]) << 8);
+
+  const std::vector<std::uint8_t> packet_data = {data.begin() + header_size, data.end()};
 
   if (packet_data.size() != data_size) {
     throw std::invalid_argument("Data size does not match the size specified in the header.");
@@ -91,34 +105,62 @@ auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet
   return {static_cast<SeriesId>(series_id), static_cast<FamilyId>(family_id), packet_data};
 }
 
-auto decode_packets(const std::vector<std::uint8_t> & data) -> std::vector<Packet>
+auto decode_packets(std::deque<std::uint8_t> & data)
+  -> std::tuple<std::vector<Packet>, std::deque<std::uint8_t>::iterator>
 {
   if (data.empty()) {
-    throw std::invalid_argument("Cannot decode an empty buffer.");
+    return {std::vector<Packet>{}, data.end()};
   }
 
   std::vector<Packet> packets;
 
   auto start = data.begin();
   auto iter = std::ranges::find(data, protocol::SYNC_BYTE);
+  auto erase_iter = data.begin();
 
   while (iter != data.end()) {
     start = iter;
-    auto next = std::ranges::find(start + 1, data.end(), protocol::SYNC_BYTE);
+    auto next = std::ranges::find(std::next(iter), data.end(), protocol::SYNC_BYTE);
 
-    const std::vector<std::uint8_t> packet_data(start, next);
-
+    std::size_t expected_size;
     try {
-      const Packet packet = decode_packet(packet_data);
-      packets.push_back(packet);
+      expected_size = calculate_packet_size({start, next});
     }
-    catch (const std::exception & e) {  // NOLINT(bugprone-empty-catch)
-      // skip invalid packets (usually just incomplete packets) - we don't log here to avoid spamming the user
+    catch (const std::exception & e) {
+      break;  // we don't have a full packet yet, so wait for more data to arrive
     }
+    const std::size_t packet_distance = std::distance(start, next) - expected_size;
+
+    if (packet_distance <= 0) {
+      // we have two continguous packets in the buffer, so we can attempt to decode multiple packets at once.
+      // note that we set the packet data to be everything between the current sync byte and the next, disregarding
+      // the expected size. this is because the expected size may be incorrect.
+      const std::vector<std::uint8_t> packet_data(start, next);
+      try {
+        packets.push_back(decode_packet(packet_data));
+      }
+      catch (const std::exception & e) {
+        std::cout << "An error occurred while attempting to decode a DVL packet: " << e.what() << "\n";
+      }
+      erase_iter = next;
+    } else {
+      // there is some data between the current sync byte and the next. we need to let the polling function extract
+      // that ascii data before we attempt to decode any additional packets, so just extract the first packet
+      const std::vector<std::uint8_t> packet_data(start, start + expected_size);
+      try {
+        packets.push_back(decode_packet(packet_data));
+      }
+      catch (const std::exception & e) {
+        std::cout << "An error occurred while attempting to decode a DVL packet: " << e.what() << "\n";
+      }
+      erase_iter = start + expected_size;
+      break;
+    }
+
     iter = next;
   }
 
-  return packets;
+  return {packets, erase_iter};
 }
 
 }  // namespace protocol

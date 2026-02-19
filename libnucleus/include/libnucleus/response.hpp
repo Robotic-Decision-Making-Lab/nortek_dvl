@@ -18,29 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include "checksum.hpp"
+#pragma once
 
-#include <cstdint>
-#include <iostream>
-#include <vector>
+#include <string>
 
-namespace nucleus::protocol
+namespace nucleus
 {
 
-[[nodiscard]] auto checksum(const std::vector<std::uint8_t> & data, std::uint16_t expected_checksum) -> bool
+struct CommandResponse
 {
-  std::uint16_t sum = 0xB58C;
-  for (std::size_t i = 0; i < data.size(); i += 2) {
-    const std::uint8_t u = data[i];
-    if (i + 1 < data.size()) {
-      const std::uint8_t v = data[i + 1];
-      sum += static_cast<std::uint16_t>(u | (v << 8));
-    } else {
-      sum += static_cast<std::uint16_t>(u << 8);
-    }
-    sum &= 0xFFFF;
-  }
-  return sum == expected_checksum;
-}
+  bool success;
+  std::string message;
+};
 
-}  // namespace nucleus::protocol
+}  // namespace nucleus

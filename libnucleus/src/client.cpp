@@ -32,6 +32,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include "ascii.hpp"
 #include "libnucleus/packet.hpp"
 #include "libnucleus/report.hpp"
 #include "login.hpp"
@@ -191,7 +192,6 @@ NucleusClient::NucleusClient(
 
 NucleusClient::~NucleusClient()
 {
-  auto null = stop_measurement();
   running_.store(false);
 
   if (polling_thread_.joinable()) {
@@ -201,67 +201,78 @@ NucleusClient::~NucleusClient()
   close(socket_);
 }
 
-auto NucleusClient::send_command(const std::string & command, Mode required_mode) -> std::future<bool>
+auto NucleusClient::send_command(const std::string & command, Mode required_mode) -> std::future<CommandResponse>
 {
   if (mode_ != required_mode) {
     throw std::runtime_error("Cannot send command in the current operating mode.");
   }
 
-  if (send(socket_, (command + "\r\n").c_str(), command.size() + 2, 0) < 0) {
-    throw std::runtime_error("Failed to send command to DVL");
+  {
+    std::lock_guard lock(socket_mutex_);
+    if (send(socket_, (command + protocol::DELIMITER).c_str(), command.size() + 2, 0) < 0) {
+      throw std::runtime_error("Failed to send command to DVL");
+    }
   }
 
-  std::promise<bool> response;
+  std::promise<CommandResponse> response;
   auto future = response.get_future();
 
-  pending_commands_[command].emplace_back(std::move(response));
+  {
+    // there isn't any identifier in the text responses, so the best that we can do is set the responses in the order
+    // that the commands were sent
+    std::lock_guard lock(command_mutex_);
+    pending_responses_.emplace_back(std::move(response));
+  }
 
   return future;
 }
 
-auto NucleusClient::start_measurement() -> std::future<bool>
+auto NucleusClient::start_measurement() -> std::future<CommandResponse>
 {
   auto future = send_command("START", Mode::COMMAND);
   mode_ = Mode::MEASUREMENT;
   return future;
 }
 
-auto NucleusClient::stop_measurement() -> std::future<bool>
+auto NucleusClient::stop_measurement() -> std::future<CommandResponse>
 {
   auto future = send_command("STOP", Mode::MEASUREMENT);
   mode_ = Mode::COMMAND;
   return future;
 }
 
-auto NucleusClient::trigger() -> std::future<bool> { return send_command("TRIG", Mode::MEASUREMENT); }
+auto NucleusClient::trigger() -> std::future<CommandResponse> { return send_command("TRIG", Mode::MEASUREMENT); }
 
-auto NucleusClient::start_field_calibration() -> std::future<bool> { return send_command("FIELDCAL", Mode::COMMAND); }
+auto NucleusClient::start_field_calibration() -> std::future<CommandResponse>
+{
+  return send_command("FIELDCAL", Mode::COMMAND);
+}
 
-auto NucleusClient::enable_fast_pressure(int sampling_rate) -> std::future<bool>
+auto NucleusClient::enable_fast_pressure(int sampling_rate) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETFASTPRESSURE,EN=1,SR={}", sampling_rate);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::disable_fast_pressure() -> std::future<bool>
+auto NucleusClient::disable_fast_pressure() -> std::future<CommandResponse>
 {
   const std::string command = "SETFASTPRESSURE,EN=0";
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::save_settings(const std::string & settings) -> std::future<bool>
+auto NucleusClient::save_settings(const std::string & settings) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SAVE,{}", settings);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::revert_to_default_settings(const std::string & settings) -> std::future<bool>
+auto NucleusClient::revert_to_default_settings(const std::string & settings) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETDEFAULT,{}", settings);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::restore_settings(const std::string & settings) -> std::future<bool>
+auto NucleusClient::restore_settings(const std::string & settings) -> std::future<CommandResponse>
 {
   const std::string command = std::format("RESTORE,{}", settings);
   return send_command(command, Mode::COMMAND);
@@ -275,7 +286,7 @@ auto NucleusClient::set_mission_settings(
   double range,
   double blanking_distance,
   double speed_of_sound,
-  double salinity) -> std::future<bool>
+  double salinity) -> std::future<CommandResponse>
 {
   const std::string command = std::format(
     "SETMISSION,POFF={:.2f},LONG={:.4f},LAT={:.4f},DECL={:.2f},RANGE={:.2f},BD={:.2f},SV={:.1f},SA={:.2f}",
@@ -290,43 +301,43 @@ auto NucleusClient::set_mission_settings(
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::enable_led() -> std::future<bool>
+auto NucleusClient::enable_led() -> std::future<CommandResponse>
 {
   const std::string command = "SETINST,LED=\"ON\"";
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::disable_led() -> std::future<bool>
+auto NucleusClient::disable_led() -> std::future<CommandResponse>
 {
   const std::string command = "SETINST,LED=\"OFF\"";
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_mounting_orientation(double roll, double pitch, double yaw) -> std::future<bool>
+auto NucleusClient::set_mounting_orientation(double roll, double pitch, double yaw) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETINST,ROTXY={:.2f},ROTXZ={:.2f},ROTYZ={:.2f}", roll, pitch, yaw);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_ahrs_output_frequency(int frequency) -> std::future<bool>
+auto NucleusClient::set_ahrs_output_frequency(int frequency) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETAHRS,FREQ={}", frequency);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_ahrs_mode(int mode) -> std::future<bool>
+auto NucleusClient::set_ahrs_mode(int mode) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETAHRS,MODE={}", mode);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_navigation_data_output_frequency(int frequency) -> std::future<bool>
+auto NucleusClient::set_navigation_data_output_frequency(int frequency) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETNAV,FREQ={}", frequency);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::enable_navigation_water_track() -> std::future<bool>
+auto NucleusClient::enable_navigation_water_track() -> std::future<CommandResponse>
 {
   if (mode_ == Mode::MEASUREMENT) {
     const std::string command = "APPLYNAV,USEWT=\"ON\"";
@@ -336,7 +347,7 @@ auto NucleusClient::enable_navigation_water_track() -> std::future<bool>
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::disable_navigation_water_track() -> std::future<bool>
+auto NucleusClient::disable_navigation_water_track() -> std::future<CommandResponse>
 {
   if (mode_ == Mode::MEASUREMENT) {
     const std::string command = "APPLYNAV,USEWT=\"OFF\"";
@@ -346,117 +357,118 @@ auto NucleusClient::disable_navigation_water_track() -> std::future<bool>
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_field_calibration_mode(int mode) -> std::future<bool>
+auto NucleusClient::set_field_calibration_mode(int mode) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETFIELDCAL,MODE={}", mode);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_bottom_track_mode(const std::string & mode) -> std::future<bool>
+auto NucleusClient::set_bottom_track_mode(const std::string & mode) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETBT,MODE=\"{}\"", mode);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_bottom_track_velocity_range(double range) -> std::future<bool>
+auto NucleusClient::set_bottom_track_velocity_range(double range) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETBT,VR={:.2f}", range);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::enable_bottom_track_water_track() -> std::future<bool>
+auto NucleusClient::enable_bottom_track_water_track() -> std::future<CommandResponse>
 {
   const std::string command = "SETBT,WT=\"ON\"";
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::disable_bottom_track_water_track() -> std::future<bool>
+auto NucleusClient::disable_bottom_track_water_track() -> std::future<CommandResponse>
 {
   const std::string command = "SETBT,WT=\"OFF\"";
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_bottom_track_power_mode(const std::string & mode) -> std::future<bool>
+auto NucleusClient::set_bottom_track_power_mode(const std::string & mode) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETBT,PLMODE=\"{}\"", mode);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_bottom_track_power_level(double power_level) -> std::future<bool>
+auto NucleusClient::set_bottom_track_power_level(double power_level) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETBT,PL={:.2f}", power_level);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::tag(const std::string & name) -> std::future<bool>
+auto NucleusClient::tag(const std::string & name) -> std::future<CommandResponse>
 {
   const std::string command = std::format("APPLYTAG,NAME=\"{}\"", name);
   return send_command(command, Mode::MEASUREMENT);
 }
 
-auto NucleusClient::set_water_track_mode(const std::string & mode) -> std::future<bool>
+auto NucleusClient::set_water_track_mode(const std::string & mode) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETWT,MODE=\"{}\"", mode);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_water_track_current(double vx, double vy, double vz) -> std::future<bool>
+auto NucleusClient::set_water_track_current(double vx, double vy, double vz) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETWT,CURX={:.2f},CURY={:.2f},CURZ={:.2f}", vx, vy, vz);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_altimeter_power_level(double power_level) -> std::future<bool>
+auto NucleusClient::set_altimeter_power_level(double power_level) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETALTI,PL={:.2f}", power_level);
   return send_command(command, Mode::COMMAND);
 }
 
 auto NucleusClient::set_current_profile(double range, double cs, double bd, const std::string & coord)
-  -> std::future<bool>
+  -> std::future<CommandResponse>
 {
   const std::string command =
     std::format("SETCURPROF,RANGE={:.2f},CS={:.2f},BD={:.2f},COORD=\"{}\"", range, cs, bd, coord);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_trigger_source(const std::string & source) -> std::future<bool>
+auto NucleusClient::set_trigger_source(const std::string & source) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETTRIG,SRC=\"{}\"", source);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_internal_trigger_frequency(int frequency) -> std::future<bool>
+auto NucleusClient::set_internal_trigger_frequency(int frequency) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETTRIG,FREQ={}", frequency);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_trigger_interleave_ratios(int altimeter_ratio, int current_profile_ratio) -> std::future<bool>
+auto NucleusClient::set_trigger_interleave_ratios(int altimeter_ratio, int current_profile_ratio)
+  -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETTRIG,ALTI={},CP={}", altimeter_ratio, current_profile_ratio);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_imu_output_frequency(int frequency) -> std::future<bool>
+auto NucleusClient::set_imu_output_frequency(int frequency) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETIMU,FREQ={}", frequency);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_magnetometer_output_frequency(int frequency) -> std::future<bool>
+auto NucleusClient::set_magnetometer_output_frequency(int frequency) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETMAG,FREQ={}", frequency);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_magnetometer_declination_method(const std::string & method) -> std::future<bool>
+auto NucleusClient::set_magnetometer_declination_method(const std::string & method) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETMAG,METHOD=\"{}\"", method);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::set_magnetometer_hard_iron_calibration(double x, double y, double z) -> std::future<bool>
+auto NucleusClient::set_magnetometer_hard_iron_calibration(double x, double y, double z) -> std::future<CommandResponse>
 {
   const std::string command = std::format("SETMAGCAL,HX={:.3f},HY={:.3f},HZ={:.3f}", x, y, z);
   return send_command(command, Mode::COMMAND);
@@ -471,7 +483,7 @@ auto NucleusClient::set_magnetometer_compensation_matrix(
   double m23,
   double m31,
   double m32,
-  double m33) -> std::future<bool>
+  double m33) -> std::future<CommandResponse>
 {
   const std::string command = std::format(
     "SETMAGCAL,M11={:.3f},M12={:.3f},M13={:.3f},M21={:.3f},M22={:.3f},M23={:.3f},M31={:.3f},M32={:.3f},M33={:.3f}",
@@ -487,49 +499,50 @@ auto NucleusClient::set_magnetometer_compensation_matrix(
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::update_mission_local_position(double x, double y) -> std::future<bool>
+auto NucleusClient::update_mission_local_position(double x, double y) -> std::future<CommandResponse>
 {
   const std::string command = std::format("UPDATEPOS,X={:.2f},Y={:.2f}", x, y);
   return send_command(command, Mode::MEASUREMENT);
 }
 
-auto NucleusClient::update_mission_relative_position(double x, double y) -> std::future<bool>
+auto NucleusClient::update_mission_relative_position(double x, double y) -> std::future<CommandResponse>
 {
   const std::string command = std::format("UPDATEPOS,DX={:.2f},DY={:.2f}", x, y);
   return send_command(command, Mode::MEASUREMENT);
 }
 
-auto NucleusClient::update_mission_global_position(double longitude, double latitude) -> std::future<bool>
+auto NucleusClient::update_mission_global_position(double longitude, double latitude) -> std::future<CommandResponse>
 {
   const std::string command = std::format("UPDATEPOS,LONG={:.4f},LAT={:.4f}", longitude, latitude);
   return send_command(command, Mode::MEASUREMENT);
 }
 
-auto NucleusClient::update_mission_water_track_mode(const std::string & mode) -> std::future<bool>
+auto NucleusClient::update_mission_water_track_mode(const std::string & mode) -> std::future<CommandResponse>
 {
   const std::string command = std::format("UPDATEWT,MODE=\"{}\"", mode);
   return send_command(command, Mode::MEASUREMENT);
 }
 
-auto NucleusClient::update_mission_current_velocity(double vx, double vy, double vz) -> std::future<bool>
+auto NucleusClient::update_mission_current_velocity(double vx, double vy, double vz) -> std::future<CommandResponse>
 {
   const std::string command = std::format("UPDATEWT,CURX={:.2f},CURY={:.2f},CURZ={:.2f}", vx, vy, vz);
   return send_command(command, Mode::MEASUREMENT);
 }
 
-auto NucleusClient::set_time() -> std::future<bool>
+auto NucleusClient::set_time() -> std::future<CommandResponse>
 {
   const std::string time = std::format("{:%Y-%m-%d %H:%M:%S}", std::chrono::utc_clock::now());
   const std::string command = std::format("SETCLOCKSTR,TIME=\"{}\"", time);
   return send_command(command, Mode::COMMAND);
 }
 
-auto NucleusClient::reboot() -> std::future<bool> { return send_command("REBOOT", Mode::COMMAND); }
+auto NucleusClient::reboot() -> std::future<CommandResponse> { return send_command("REBOOT", Mode::COMMAND); }
 
-// auto NucleusClient::get_error() -> std::future<std::string>
-// {
-//   // TODO(evan-palmer): maybe implement this??
-// }
+auto NucleusClient::get_error() -> std::future<CommandResponse>
+{
+  const std::string command = "GETERROR";
+  return send_command(command, Mode::COMMAND);
+}
 
 auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
 {
@@ -583,49 +596,76 @@ auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
   }
 }
 
+auto NucleusClient::process_incoming_response(const CommandResponse & response) -> void
+{
+  std::lock_guard lock(command_mutex_);
+  if (!pending_responses_.empty()) {
+    auto promise = std::move(pending_responses_.front());
+    pending_responses_.pop_front();
+    promise.set_value(response);
+  } else {
+    std::cout << "Received an unexpected response from the DVL: " << response.message << "\n";
+  }
+}
+
 auto NucleusClient::poll_connection() -> void
 {
   // Maintain a queue to store incoming data
-  const std::size_t max_bytes_to_read = 2048;  // Reports can be quite large, so create a large buffer
+  const std::size_t max_buffer_size = 4096;
+  const std::size_t max_bytes_to_read = 2048;
   std::deque<std::uint8_t> buffer;
-  std::size_t n_bytes_to_read = max_bytes_to_read;
 
   while (running_.load()) {
-    const auto n_read = read_from_socket(socket_, buffer, n_bytes_to_read);
+    ssize_t n_read = -1;  // NOLINT
+    {
+      std::lock_guard lock(socket_mutex_);
+      n_read = read_from_socket(socket_, buffer, max_bytes_to_read);
+    }
+
     if (n_read < 0) {
-      std::cout << "Failed to read from the DVL; the connection was likely lost.\n";
+      std::cout << "Failed to read from the DVL. The connection was likely lost.\n";
+      continue;
     }
 
-    auto first_delim = std::ranges::find(buffer, protocol::SYNC_BYTE);
-    auto last_delim = std::ranges::find(buffer | std::views::reverse, protocol::SYNC_BYTE);
+    // we are probably in command mode here
+    if (buffer.size() == 0) {
+      continue;
+    }
 
-    if (
-      first_delim != buffer.end() && last_delim != std::ranges::end(buffer | std::views::reverse) &&
-      first_delim != std::prev(last_delim.base())) {
-      const auto last = std::prev(last_delim.base());
-      try {
-        const auto window = std::vector<std::uint8_t>(first_delim, last);
-        const std::vector<Packet> packets = protocol::decode_packets(window);
+    // this implements a circular-like buffer
+    if (buffer.size() > max_buffer_size) {
+      const auto n_to_remove = buffer.size() - max_buffer_size;
+      buffer.erase(buffer.begin(), buffer.begin() + n_to_remove);
+    }
 
+    auto first_sync = std::ranges::find(buffer, protocol::SYNC_BYTE);
+    if (first_sync != buffer.end()) {
+      // process all data leading up to the first sync byte as ASCII data, which should contain command responses
+      std::deque<std::uint8_t> ascii_data(buffer.begin(), first_sync);
+      auto [responses, ascii_erase_iter] = protocol::split_responses(ascii_data);
+      for (const auto & response : responses) {
+        process_incoming_response(response);
+      }
+      buffer.erase(buffer.begin(), first_sync);
+
+      // check if the remaining buffer might have a packet. if it does, then try to decode the data and process the
+      // resulting packets
+      if (protocol::might_contain_packet(buffer)) {
+        auto [packets, packet_erase_iter] = protocol::decode_packets(buffer);
         if (!packets.empty()) {
-          for (const auto & report : packets) {
-            process_incoming_packet(report);
+          for (const auto & packet : packets) {
+            process_incoming_packet(packet);
           }
-        };
-
-        buffer.erase(buffer.begin(), last);
+        }
+        buffer.erase(buffer.begin(), packet_erase_iter);
       }
-      catch (const std::exception & e) {
-        std::cout << "An error occurred while attempting to decode a DVL message: " << e.what() << "\n";
-        buffer.clear();
+    } else {
+      auto [responses, ascii_erase_iter] = protocol::split_responses(buffer);
+      for (const auto & response : responses) {
+        process_incoming_response(response);
       }
+      buffer.erase(buffer.begin(), ascii_erase_iter);
     }
-
-    if (buffer.size() > max_bytes_to_read) {
-      buffer.clear();
-    }
-
-    n_bytes_to_read = max_bytes_to_read - buffer.size();
   }
 }
 

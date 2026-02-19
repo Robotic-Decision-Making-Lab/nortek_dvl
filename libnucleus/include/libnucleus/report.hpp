@@ -326,7 +326,6 @@ template <typename T>
     throw std::invalid_argument("Cannot deserialize data into the requested type due to mismatched sizes.");
   }
 
-  // this isn't efficient, but the data rates are low enough that it shouldn't matter
   T result;
   std::memcpy(&result, data.data(), bytes);
   erase(data, bytes);

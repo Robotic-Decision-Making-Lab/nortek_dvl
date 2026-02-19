@@ -22,6 +22,8 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <deque>
+#include <string>
 #include <vector>
 
 #include "libnucleus/family_id.hpp"
@@ -72,9 +74,12 @@ namespace protocol
 /// Sync byte used to identify the start of a Nortek Nucleus packet.
 const std::uint8_t SYNC_BYTE = 0xA5;
 
+[[nodiscard]] auto might_contain_packet(const std::deque<std::uint8_t> & data) -> bool;
+
 [[nodiscard]] auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet;
 
-[[nodiscard]] auto decode_packets(const std::vector<std::uint8_t> & data) -> std::vector<Packet>;
+[[nodiscard]] auto decode_packets(std::deque<std::uint8_t> & data)
+  -> std::tuple<std::vector<Packet>, std::deque<std::uint8_t>::iterator>;
 
 }  // namespace protocol
 

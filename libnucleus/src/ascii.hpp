@@ -18,29 +18,29 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include "checksum.hpp"
+#pragma once
 
 #include <cstdint>
-#include <iostream>
+#include <deque>
+#include <string>
 #include <vector>
+
+#include "libnucleus/response.hpp"
 
 namespace nucleus::protocol
 {
 
-[[nodiscard]] auto checksum(const std::vector<std::uint8_t> & data, std::uint16_t expected_checksum) -> bool
-{
-  std::uint16_t sum = 0xB58C;
-  for (std::size_t i = 0; i < data.size(); i += 2) {
-    const std::uint8_t u = data[i];
-    if (i + 1 < data.size()) {
-      const std::uint8_t v = data[i + 1];
-      sum += static_cast<std::uint16_t>(u | (v << 8));
-    } else {
-      sum += static_cast<std::uint16_t>(u << 8);
-    }
-    sum &= 0xFFFF;
-  }
-  return sum == expected_checksum;
-}
+const std::string DELIMITER = "\r\n";
+
+const std::string ERROR_RESPONSE = "ERROR";
+
+const std::string SUCCESS_RESPONSE = "OK";
+
+const std::string ERROR_TERMINATOR = ERROR_RESPONSE + DELIMITER;
+
+const std::string SUCCESS_TERMINATOR = SUCCESS_RESPONSE + DELIMITER;
+
+[[nodiscard]] auto split_responses(std::deque<std::uint8_t> & data)
+  -> std::tuple<std::vector<CommandResponse>, std::deque<std::uint8_t>::iterator>;
 
 }  // namespace nucleus::protocol
