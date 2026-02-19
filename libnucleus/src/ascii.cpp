@@ -21,6 +21,7 @@
 #include "ascii.hpp"
 
 #include <cstdint>
+#include <iostream>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -38,10 +39,7 @@ auto split_responses(std::deque<std::uint8_t> & data)
 
   const std::string data_str(data.begin(), data.end());
 
-  const std::size_t last_success_message = data_str.rfind(SUCCESS_TERMINATOR);
-  const std::size_t last_error_message = data_str.rfind(ERROR_TERMINATOR);
-
-  std::size_t last_index = std::string::npos;
+  std::size_t last_index = 0;
 
   auto update_last_index = [&](std::size_t position, std::size_t term_size) -> void {
     if (position != std::string::npos) {
@@ -50,8 +48,8 @@ auto split_responses(std::deque<std::uint8_t> & data)
     }
   };
 
-  update_last_index(last_success_message, SUCCESS_TERMINATOR.size());
-  update_last_index(last_error_message, ERROR_TERMINATOR.size());
+  update_last_index(data_str.rfind(SUCCESS_TERMINATOR), SUCCESS_TERMINATOR.size());
+  update_last_index(data_str.rfind(ERROR_TERMINATOR), ERROR_TERMINATOR.size());
 
   if (last_index == std::string::npos) {
     return {std::vector<CommandResponse>{}, data.begin()};
