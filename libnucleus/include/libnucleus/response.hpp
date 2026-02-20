@@ -25,7 +25,7 @@
 namespace nucleus
 {
 
-struct CommandResponse
+struct Response
 {
   bool success;
   std::string message;

@@ -44,35 +44,6 @@ auto calculate_packet_size(const std::vector<std::uint8_t> & data) -> std::size_
   return header_size + data_size;
 }
 
-}  // namespace
-
-Packet::Packet(SeriesId series_id, FamilyId family_id, std::vector<std::uint8_t> data)
-: series_id_(series_id),
-  family_id_(family_id),
-  data_(std::move(data))
-{
-}
-
-auto Packet::series_id() const -> SeriesId { return series_id_; }
-
-auto Packet::family_id() const -> FamilyId { return family_id_; }
-
-auto Packet::data() const -> std::vector<std::uint8_t> { return data_; }
-
-auto Packet::data_size() const -> std::size_t { return data_.size(); }
-
-namespace protocol
-{
-
-auto might_contain_packet(const std::deque<std::uint8_t> & data) -> bool
-{
-  // the absolute minimum amount of data that we need is 6 bytes; this allows us to check the header size and data size
-  if (data.size() < 6) {
-    return false;
-  }
-  return data.size() >= calculate_packet_size({data.begin(), data.end()});
-}
-
 auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet
 {
   if (data.size() < 10) {
@@ -103,6 +74,35 @@ auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet
   }
 
   return {static_cast<SeriesId>(series_id), static_cast<FamilyId>(family_id), packet_data};
+}
+
+}  // namespace
+
+Packet::Packet(SeriesId series_id, FamilyId family_id, std::vector<std::uint8_t> data)
+: series_id_(series_id),
+  family_id_(family_id),
+  data_(std::move(data))
+{
+}
+
+auto Packet::series_id() const -> SeriesId { return series_id_; }
+
+auto Packet::family_id() const -> FamilyId { return family_id_; }
+
+auto Packet::data() const -> std::vector<std::uint8_t> { return data_; }
+
+auto Packet::data_size() const -> std::size_t { return data_.size(); }
+
+namespace protocol
+{
+
+auto might_contain_packet(const std::deque<std::uint8_t> & data) -> bool
+{
+  // the absolute minimum amount of data that we need is 6 bytes; this allows us to check the header size and data size
+  if (data.size() < 6) {
+    return false;
+  }
+  return data.size() >= calculate_packet_size({data.begin(), data.end()});
 }
 
 auto decode_packets(std::deque<std::uint8_t> & data)
@@ -139,8 +139,8 @@ auto decode_packets(std::deque<std::uint8_t> & data)
       try {
         packets.push_back(decode_packet(packet_data));
       }
-      catch (const std::exception & e) {
-        std::cout << "An error occurred while attempting to decode a DVL packet: " << e.what() << "\n";
+      catch (const std::exception & e) {  // NOLINT
+        // decoding error - just ignore it and move on to the next packet
       }
       erase_iter = next;
     } else {
@@ -150,8 +150,8 @@ auto decode_packets(std::deque<std::uint8_t> & data)
       try {
         packets.push_back(decode_packet(packet_data));
       }
-      catch (const std::exception & e) {
-        std::cout << "An error occurred while attempting to decode a DVL packet: " << e.what() << "\n";
+      catch (const std::exception & e) {  // NOLINT
+        // decoding error - just ignore it
       }
       erase_iter = start + expected_size;
       break;

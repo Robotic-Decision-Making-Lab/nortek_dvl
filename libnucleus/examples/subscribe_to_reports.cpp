@@ -33,14 +33,10 @@ auto main() -> int
     std::cout << std::format("timestamp={}, vx={}, vy={}, vz={}\n", report.timestamp, report.vx, report.vy, report.vz);
   });
 
-  // Let the driver run for 10 seconds to receive some reports before stopping the measurement and exiting.
-  // std::this_thread::sleep_for(std::chrono::seconds(10));
-  while (true) {
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-  }
+  std::this_thread::sleep_for(std::chrono::seconds(10));
 
   auto stop_future = client.stop_measurement();
-  const nucleus::CommandResponse stop_response = stop_future.get();
+  const nucleus::Response stop_response = stop_future.get();
   std::cout << "Stop measurement result: " << stop_response.success << "\n";
 
   return 0;

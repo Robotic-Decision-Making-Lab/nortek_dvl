@@ -30,17 +30,26 @@
 namespace nucleus::protocol
 {
 
+/// Delimiter used to separate lines in ASCII responses.
 const std::string DELIMITER = "\r\n";
 
+/// Response indicating an error in an ASCII message.
 const std::string ERROR_RESPONSE = "ERROR";
 
+/// Response indicating success in an ASCII message.
 const std::string SUCCESS_RESPONSE = "OK";
 
+/// Error response, including delimiter.
 const std::string ERROR_TERMINATOR = ERROR_RESPONSE + DELIMITER;
 
+/// Success response, including delimiter.
 const std::string SUCCESS_TERMINATOR = SUCCESS_RESPONSE + DELIMITER;
 
+/// Split a byte array that may contain one or more ASCII messages into individual responses.
+///
+/// This returns a vector of all ASCII responses contained in the data and an iterator pointing to the end of the last
+/// response.
 [[nodiscard]] auto split_responses(std::deque<std::uint8_t> & data)
-  -> std::tuple<std::vector<CommandResponse>, std::deque<std::uint8_t>::iterator>;
+  -> std::tuple<std::vector<Response>, std::deque<std::uint8_t>::iterator>;
 
 }  // namespace nucleus::protocol

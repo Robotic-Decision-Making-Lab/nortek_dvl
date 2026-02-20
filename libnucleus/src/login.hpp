@@ -25,6 +25,7 @@
 namespace nucleus::protocol
 {
 
+/// Login to the instrument using the provided password.
 auto login(int socket, const std::string & password) -> bool;
 
 }  // namespace nucleus::protocol

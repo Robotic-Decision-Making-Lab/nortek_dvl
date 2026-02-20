@@ -31,16 +31,15 @@ namespace nucleus::protocol
 {
 
 auto split_responses(std::deque<std::uint8_t> & data)
-  -> std::tuple<std::vector<CommandResponse>, std::deque<std::uint8_t>::iterator>
+  -> std::tuple<std::vector<Response>, std::deque<std::uint8_t>::iterator>
 {
   if (data.empty()) {
-    return {std::vector<CommandResponse>{}, data.end()};
+    return {std::vector<Response>{}, data.end()};
   }
 
   const std::string data_str(data.begin(), data.end());
 
   std::size_t last_index = 0;
-
   auto update_last_index = [&](std::size_t position, std::size_t term_size) -> void {
     if (position != std::string::npos) {
       const std::size_t index = position + term_size;
@@ -52,10 +51,10 @@ auto split_responses(std::deque<std::uint8_t> & data)
   update_last_index(data_str.rfind(ERROR_TERMINATOR), ERROR_TERMINATOR.size());
 
   if (last_index == std::string::npos) {
-    return {std::vector<CommandResponse>{}, data.begin()};
+    return {std::vector<Response>{}, data.begin()};
   }
 
-  std::vector<CommandResponse> responses;
+  std::vector<Response> responses;
 
   const auto valid_messages = std::string_view(data_str.begin(), data_str.begin() + last_index);
   auto lines = valid_messages | std::views::split(std::string_view(DELIMITER));

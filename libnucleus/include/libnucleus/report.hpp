@@ -284,7 +284,7 @@ struct VelocityReport : CommonData
   float pressure;
 
   // Transducer reports.
-  std::array<TransducerReport, 3> transducer_reports;
+  std::array<TransducerReport, 3> transducers;
 
   // Bottom track x velocity (m/s).
   float vx;
@@ -582,15 +582,15 @@ struct Deserializer<VelocityReport>
     protocol::erase(data, 12);  // velocity data starts after 12 bytes
 
     const auto flags = protocol::pop<std::uint32_t>(data);
-    report.transducer_reports[0].velocity_valid = protocol::check_flag(flags, 0);
-    report.transducer_reports[1].velocity_valid = protocol::check_flag(flags, 1);
-    report.transducer_reports[2].velocity_valid = protocol::check_flag(flags, 2);
-    report.transducer_reports[0].distance_valid = protocol::check_flag(flags, 3);
-    report.transducer_reports[1].distance_valid = protocol::check_flag(flags, 4);
-    report.transducer_reports[2].distance_valid = protocol::check_flag(flags, 5);
-    report.transducer_reports[0].std_valid = protocol::check_flag(flags, 6);
-    report.transducer_reports[1].std_valid = protocol::check_flag(flags, 7);
-    report.transducer_reports[2].std_valid = protocol::check_flag(flags, 8);
+    report.transducers[0].velocity_valid = protocol::check_flag(flags, 0);
+    report.transducers[1].velocity_valid = protocol::check_flag(flags, 1);
+    report.transducers[2].velocity_valid = protocol::check_flag(flags, 2);
+    report.transducers[0].distance_valid = protocol::check_flag(flags, 3);
+    report.transducers[1].distance_valid = protocol::check_flag(flags, 4);
+    report.transducers[2].distance_valid = protocol::check_flag(flags, 5);
+    report.transducers[0].std_valid = protocol::check_flag(flags, 6);
+    report.transducers[1].std_valid = protocol::check_flag(flags, 7);
+    report.transducers[2].std_valid = protocol::check_flag(flags, 8);
 
     bool velocity_x_valid = protocol::check_flag(flags, 9);
     bool velocity_y_valid = protocol::check_flag(flags, 10);
@@ -610,25 +610,25 @@ struct Deserializer<VelocityReport>
     report.temperature = protocol::pop<float>(data);
     report.pressure = protocol::pop<float>(data);
 
-    report.transducer_reports[0].velocity = protocol::pop<float>(data);
-    report.transducer_reports[1].velocity = protocol::pop<float>(data);
-    report.transducer_reports[2].velocity = protocol::pop<float>(data);
+    report.transducers[0].velocity = protocol::pop<float>(data);
+    report.transducers[1].velocity = protocol::pop<float>(data);
+    report.transducers[2].velocity = protocol::pop<float>(data);
 
-    report.transducer_reports[0].distance = protocol::pop<float>(data);
-    report.transducer_reports[1].distance = protocol::pop<float>(data);
-    report.transducer_reports[2].distance = protocol::pop<float>(data);
+    report.transducers[0].distance = protocol::pop<float>(data);
+    report.transducers[1].distance = protocol::pop<float>(data);
+    report.transducers[2].distance = protocol::pop<float>(data);
 
-    report.transducer_reports[0].std = protocol::pop<float>(data);
-    report.transducer_reports[1].std = protocol::pop<float>(data);
-    report.transducer_reports[2].std = protocol::pop<float>(data);
+    report.transducers[0].std = protocol::pop<float>(data);
+    report.transducers[1].std = protocol::pop<float>(data);
+    report.transducers[2].std = protocol::pop<float>(data);
 
-    report.transducer_reports[0].time_delta = protocol::pop<float>(data);
-    report.transducer_reports[1].time_delta = protocol::pop<float>(data);
-    report.transducer_reports[2].time_delta = protocol::pop<float>(data);
+    report.transducers[0].time_delta = protocol::pop<float>(data);
+    report.transducers[1].time_delta = protocol::pop<float>(data);
+    report.transducers[2].time_delta = protocol::pop<float>(data);
 
-    report.transducer_reports[0].time_velocity_estimate = protocol::pop<float>(data);
-    report.transducer_reports[1].time_velocity_estimate = protocol::pop<float>(data);
-    report.transducer_reports[2].time_velocity_estimate = protocol::pop<float>(data);
+    report.transducers[0].time_velocity_estimate = protocol::pop<float>(data);
+    report.transducers[1].time_velocity_estimate = protocol::pop<float>(data);
+    report.transducers[2].time_velocity_estimate = protocol::pop<float>(data);
 
     report.vx = protocol::pop<float>(data);
     report.vy = protocol::pop<float>(data);
