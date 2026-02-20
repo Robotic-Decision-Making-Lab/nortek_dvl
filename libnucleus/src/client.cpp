@@ -576,10 +576,10 @@ auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
       dispatch_report(packet.get<AltimeterReport>());
       break;
     case SeriesId::BOTTOM_TRACK_DATA:
-      dispatch_report(packet.get<VelocityReport>());
+      dispatch_report(packet.get<BottomTrackReport>());
       break;
     case SeriesId::WATER_TRACK_DATA:
-      dispatch_report(packet.get<VelocityReport>());
+      dispatch_report(packet.get<SurfaceTrackReport>());
       break;
     case SeriesId::CURRENT_PROFILER_DATA:
       // TODO(evan-palmer): figure out whether or not this is actually used

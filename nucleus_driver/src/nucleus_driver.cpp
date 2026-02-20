@@ -86,7 +86,7 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
   dvl_pub_ = create_publisher<marine_acoustic_msgs::msg::Dvl>("~/raw", rclcpp::SystemDefaultsQoS());
   twist_pub_ = create_publisher<geometry_msgs::msg::TwistWithCovarianceStamped>("~/twist", rclcpp::SystemDefaultsQoS());
 
-  client_->subscribe<VelocityReport>([this](const VelocityReport & report) -> void {
+  client_->subscribe<BottomTrackReport>([this](const BottomTrackReport & report) -> void {
     twist_msg_.header.stamp = rclcpp::Time(report.timestamp.count());
 
     dvl_msg_.velocity.x = report.vx;
@@ -115,7 +115,7 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
   });
 
   // much of the following code could be moved into the above callback, but we separate it to improve readability
-  client_->subscribe<VelocityReport>([this](const VelocityReport & report) -> void {
+  client_->subscribe<BottomTrackReport>([this](const BottomTrackReport & report) -> void {
     twist_msg_.header.stamp = rclcpp::Time(report.timestamp.count());
 
     twist_msg_.twist.twist.linear.x = report.vx;

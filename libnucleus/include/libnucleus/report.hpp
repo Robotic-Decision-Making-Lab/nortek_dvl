@@ -305,6 +305,16 @@ struct VelocityReport : CommonData
   bool covariance_valid;
 };
 
+/// The bottom track report and surface track report have the same fields as the velocity report, but they are
+/// dispatched separately to allow users to subscribe to them separately.
+struct BottomTrackReport : VelocityReport
+{
+};
+
+struct SurfaceTrackReport : VelocityReport
+{
+};
+
 namespace protocol
 {
 
@@ -637,6 +647,24 @@ struct Deserializer<VelocityReport>
     report.covariance(0, 0) = protocol::pop<float>(data);
     report.covariance(1, 1) = protocol::pop<float>(data);
     report.covariance(2, 2) = protocol::pop<float>(data);
+  }
+};
+
+template <>
+struct Deserializer<BottomTrackReport>
+{
+  static void from_data(std::vector<std::uint8_t> data, BottomTrackReport & report)
+  {
+    Deserializer<VelocityReport>::from_data(data, report);
+  }
+};
+
+template <>
+struct Deserializer<SurfaceTrackReport>
+{
+  static void from_data(std::vector<std::uint8_t> data, SurfaceTrackReport & report)
+  {
+    Deserializer<VelocityReport>::from_data(data, report);
   }
 };
 

@@ -29,15 +29,14 @@ auto main() -> int
   nucleus::NucleusClient client("192.168.2.201", "nortek");
   auto start_future = client.start_measurement();
 
-  client.subscribe<nucleus::VelocityReport>([](const nucleus::VelocityReport & report) -> void {
+  client.subscribe<nucleus::BottomTrackReport>([](const nucleus::BottomTrackReport & report) -> void {
     std::cout << std::format("timestamp={}, vx={}, vy={}, vz={}\n", report.timestamp, report.vx, report.vy, report.vz);
+    std::cout << std::format("velocity_valid={}\n", report.velocity_valid);
   });
 
   std::this_thread::sleep_for(std::chrono::seconds(10));
 
   auto stop_future = client.stop_measurement();
-  const nucleus::Response stop_response = stop_future.get();
-  std::cout << "Stop measurement result: " << stop_response.success << "\n";
 
   return 0;
 }
