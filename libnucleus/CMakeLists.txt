@@ -19,7 +19,12 @@ add_library(libnucleus SHARED)
 
 target_sources(
     libnucleus
-    PRIVATE src/checksum.cpp src/client.cpp src/login.cpp src/packet.cpp src/ascii.cpp
+    PRIVATE
+        src/checksum.cpp
+        src/client.cpp
+        src/login.cpp
+        src/packet.cpp
+        src/ascii.cpp
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -41,11 +46,7 @@ set(EXAMPLES subscribe_to_reports)
 foreach(example IN ITEMS ${EXAMPLES})
     add_executable(${example} examples/${example}.cpp)
     add_dependencies(${example} libnucleus)
-    target_link_libraries(
-        ${example}
-        PUBLIC libnucleus
-        PRIVATE Eigen3::Eigen
-    )
+    target_link_libraries(${example} PUBLIC libnucleus PRIVATE Eigen3::Eigen)
     set_target_properties(
         ${example}
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/examples

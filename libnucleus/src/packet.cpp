@@ -132,7 +132,7 @@ auto decode_packets(std::deque<std::uint8_t> & data)
     const std::size_t packet_distance = std::distance(start, next) - expected_size;
 
     if (packet_distance <= 0) {
-      // we have two continguous packets in the buffer, so we can attempt to decode multiple packets at once.
+      // we have two contiguous packets in the buffer, so we can attempt to decode multiple packets at once.
       // note that we set the packet data to be everything between the current sync byte and the next, disregarding
       // the expected size. this is because the expected size may be incorrect.
       const std::vector<std::uint8_t> packet_data(start, next);

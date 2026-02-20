@@ -13,7 +13,7 @@
     "bash": {
       "path": "bash",
       "icon": "terminal-bash",
-      "args": ["-i"]
+      "args": ["-i"],
     }
   },
   "files.insertFinalNewline": true,
