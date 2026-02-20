@@ -52,7 +52,6 @@ RUN python3 -m venv --system-site-packages $VIRTUAL_ENV \
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install all ROS dependencies
-RUN vcs import src < src/$PROJECT_NAME/ros2.repos
 WORKDIR $USER_WORKSPACE
 RUN sudo apt-get -q update \
     && sudo apt-get -q -y upgrade \

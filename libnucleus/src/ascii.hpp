@@ -18,26 +18,38 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include <iostream>
+#pragma once
 
-#include "libnucleus/client.hpp"
-#include "libnucleus/report.hpp"
-#include "libnucleus/series_id.hpp"
+#include <cstdint>
+#include <deque>
+#include <string>
+#include <vector>
 
-auto main() -> int
+#include "libnucleus/response.hpp"
+
+namespace nucleus::protocol
 {
-  nucleus::NucleusClient client("192.168.2.201", "nortek");
-  auto start_future = client.start_measurement();
 
-  client.subscribe<nucleus::VelocityReport>([](const nucleus::VelocityReport & report) -> void {
-    std::cout << std::format("timestamp={}, vx={}, vy={}, vz={}\n", report.timestamp, report.vx, report.vy, report.vz);
-  });
+/// Delimiter used to separate lines in ASCII responses.
+const std::string DELIMITER = "\r\n";
 
-  std::this_thread::sleep_for(std::chrono::seconds(10));
+/// Response indicating an error in an ASCII message.
+const std::string ERROR_RESPONSE = "ERROR";
 
-  auto stop_future = client.stop_measurement();
-  const nucleus::Response stop_response = stop_future.get();
-  std::cout << "Stop measurement result: " << stop_response.success << "\n";
+/// Response indicating success in an ASCII message.
+const std::string SUCCESS_RESPONSE = "OK";
 
-  return 0;
-}
+/// Error response, including delimiter.
+const std::string ERROR_TERMINATOR = ERROR_RESPONSE + DELIMITER;
+
+/// Success response, including delimiter.
+const std::string SUCCESS_TERMINATOR = SUCCESS_RESPONSE + DELIMITER;
+
+/// Split a byte array that may contain one or more ASCII messages into individual responses.
+///
+/// This returns a vector of all ASCII responses contained in the data and an iterator pointing to the end of the last
+/// response.
+[[nodiscard]] auto split_responses(std::deque<std::uint8_t> & data)
+  -> std::tuple<std::vector<Response>, std::deque<std::uint8_t>::iterator>;
+
+}  // namespace nucleus::protocol

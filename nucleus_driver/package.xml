@@ -2,9 +2,9 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
 
-  <name>libnucleus</name>
+  <name>nucleus_driver</name>
   <version>0.0.1</version>
-  <description>C++ library used to interact with the Nortek Nucleus</description>
+  <description>ROS 2 driver for the Nortek Nucleus DVL</description>
 
   <maintainer email="evanp922@gmail.com">Evan Palmer</maintainer>
   <license>MIT</license>
@@ -12,12 +12,16 @@
   <url type="repository">https://github.com/Robotic-Decision-Making-Lab/nortek_dvl.git</url>
   <url type="bugtracker">https://github.com/Robotic-Decision-Making-Lab/nortek_dvl/issues</url>
 
-  <author>Evan Palmer</author>
-
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <buildtool_depend>eigen3_cmake_module</buildtool_depend>
 
-  <depend>eigen</depend>
+  <depend>marine_acoustic_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>libnucleus</depend>
+  <depend>generate_parameter_library</depend>
+  <depend>rclcpp_components</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

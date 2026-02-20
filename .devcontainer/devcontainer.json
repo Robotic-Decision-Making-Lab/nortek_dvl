@@ -24,10 +24,10 @@
         "redhat.vscode-yaml",
         "smilerobotics.urdf",
         "DavidAnson.vscode-markdownlint",
-        "esbenp.prettier-vscode",
         "xaver.clang-format",
         "charliermarsh.ruff",
-        "ms-vscode.cmake-tools"
+        "ms-vscode.cmake-tools",
+        "ms-vscode.cpptools-extension-pack"
       ]
     }
   }

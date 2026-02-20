@@ -1,0 +1,24 @@
+nucleus_driver:
+  ip_address:
+    type: string
+    default_value: "192.168.2.201"
+    description: "The IP address of the DVL."
+    read_only: true
+
+  password:
+    type: string
+    default_value: "nortek"
+    description: "The password for the DVL."
+    read_only: true
+
+  timeout:
+    type: int
+    default_value: 5
+    description: "The timeout for the DVL connection (s)."
+    read_only: true
+
+  frame_id:
+    type: string
+    default_value: "dvl_link"
+    description: "The frame ID of the DVL."
+    read_only: true

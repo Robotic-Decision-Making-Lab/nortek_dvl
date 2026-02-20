@@ -18,26 +18,29 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#include "checksum.hpp"
+
+#include <cstdint>
 #include <iostream>
+#include <vector>
 
-#include "libnucleus/client.hpp"
-#include "libnucleus/report.hpp"
-#include "libnucleus/series_id.hpp"
-
-auto main() -> int
+namespace nucleus::protocol
 {
-  nucleus::NucleusClient client("192.168.2.201", "nortek");
-  auto start_future = client.start_measurement();
 
-  client.subscribe<nucleus::VelocityReport>([](const nucleus::VelocityReport & report) -> void {
-    std::cout << std::format("timestamp={}, vx={}, vy={}, vz={}\n", report.timestamp, report.vx, report.vy, report.vz);
-  });
-
-  std::this_thread::sleep_for(std::chrono::seconds(10));
-
-  auto stop_future = client.stop_measurement();
-  const nucleus::Response stop_response = stop_future.get();
-  std::cout << "Stop measurement result: " << stop_response.success << "\n";
-
-  return 0;
+[[nodiscard]] auto checksum(const std::vector<std::uint8_t> & data, std::uint16_t expected_checksum) -> bool
+{
+  std::uint16_t sum = 0xB58C;
+  for (std::size_t i = 0; i < data.size(); i += 2) {
+    const std::uint8_t u = data[i];
+    if (i + 1 < data.size()) {
+      const std::uint8_t v = data[i + 1];
+      sum += static_cast<std::uint16_t>(u | (v << 8));
+    } else {
+      sum += static_cast<std::uint16_t>(u << 8);
+    }
+    sum &= 0xFFFF;
+  }
+  return sum == expected_checksum;
 }
+
+}  // namespace nucleus::protocol

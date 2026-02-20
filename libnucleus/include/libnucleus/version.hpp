@@ -18,26 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include <iostream>
+#pragma once
 
-#include "libnucleus/client.hpp"
-#include "libnucleus/report.hpp"
-#include "libnucleus/series_id.hpp"
+#include <string>
 
-auto main() -> int
-{
-  nucleus::NucleusClient client("192.168.2.201", "nortek");
-  auto start_future = client.start_measurement();
+constexpr int NORTEK_NUCLEUS_PROTOCOL_VERSION_VERSION = 2025;
+constexpr int NORTEK_NUCLEUS_PROTOCOL_VERSION_REVISION = 2;
 
-  client.subscribe<nucleus::VelocityReport>([](const nucleus::VelocityReport & report) -> void {
-    std::cout << std::format("timestamp={}, vx={}, vy={}, vz={}\n", report.timestamp, report.vx, report.vy, report.vz);
-  });
-
-  std::this_thread::sleep_for(std::chrono::seconds(10));
-
-  auto stop_future = client.stop_measurement();
-  const nucleus::Response stop_response = stop_future.get();
-  std::cout << "Stop measurement result: " << stop_response.success << "\n";
-
-  return 0;
-}
+constexpr auto NORTEK_NUCLEUS_PROTOCOL_VERSION = "2025.2";
