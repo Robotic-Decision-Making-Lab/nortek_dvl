@@ -24,7 +24,7 @@ target_sources(
         src/client.cpp
         src/login.cpp
         src/packet.cpp
-        src/ascii.cpp
+        src/response.cpp
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include

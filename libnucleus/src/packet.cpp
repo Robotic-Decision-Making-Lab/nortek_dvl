@@ -105,11 +105,10 @@ auto might_contain_packet(const std::deque<std::uint8_t> & data) -> bool
   return data.size() >= calculate_packet_size({data.begin(), data.end()});
 }
 
-auto decode_packets(std::deque<std::uint8_t> & data)
-  -> std::tuple<std::vector<Packet>, std::deque<std::uint8_t>::iterator>
+auto decode_packets(const std::deque<std::uint8_t> & data) -> std::tuple<std::vector<Packet>, std::size_t>
 {
   if (data.empty()) {
-    return {std::vector<Packet>{}, data.end()};
+    return {std::vector<Packet>{}, 0};
   }
 
   std::vector<Packet> packets;
@@ -160,7 +159,7 @@ auto decode_packets(std::deque<std::uint8_t> & data)
     iter = next;
   }
 
-  return {packets, erase_iter};
+  return {packets, std::distance(data.begin(), erase_iter)};
 }
 
 }  // namespace protocol

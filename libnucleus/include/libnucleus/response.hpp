@@ -20,7 +20,10 @@
 
 #pragma once
 
+#include <cstdint>
+#include <deque>
 #include <string>
+#include <vector>
 
 namespace nucleus
 {
@@ -30,5 +33,14 @@ struct Response
   bool success;
   std::string message;
 };
+
+namespace protocol
+{
+
+/// Split a byte array that may contain one or more ASCII messages into individual responses.
+[[nodiscard]] auto decode_responses(const std::deque<std::uint8_t> & data)
+  -> std::tuple<std::vector<Response>, std::size_t>;
+
+}  // namespace protocol
 
 }  // namespace nucleus

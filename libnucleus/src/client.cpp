@@ -54,7 +54,15 @@ auto read_from_socket(
   const int rc = poll(pfds, 1, timeout.count());
 
   if (rc < 0) {
-    return rc;
+    return -1;  // error
+  }
+
+  if (rc == 0) {
+    return 0;  // timeout
+  }
+
+  if (pfds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+    return -1;
   }
 
   if (((pfds[0].revents & POLLIN) == 0)) {
@@ -176,7 +184,6 @@ NucleusClient::NucleusClient(
   const std::string & addr,
   const std::string & password,
   std::chrono::seconds connection_timeout)
-: command_interface_available_{true}
 {
   // Open a TCP socket and connect to the DVL
   socket_ = open(addr, 9000, connection_timeout);  // connect to the primary port
@@ -201,12 +208,8 @@ NucleusClient::~NucleusClient()
   close(socket_);
 }
 
-auto NucleusClient::send_command(const std::string & command, Mode required_mode) -> std::future<Response>
+auto NucleusClient::send_command(const std::string & command) -> std::future<Response>
 {
-  if (mode_ != required_mode) {
-    throw std::runtime_error("Cannot send command in the current operating mode.");
-  }
-
   {
     std::lock_guard lock(socket_mutex_);
     if (send(socket_, (command + protocol::DELIMITER).c_str(), command.size() + 2, 0) < 0) {
@@ -227,16 +230,29 @@ auto NucleusClient::send_command(const std::string & command, Mode required_mode
   return future;
 }
 
+auto NucleusClient::send_command(const std::string & command, Mode required_mode) -> std::future<Response>
+{
+  if (mode_ != required_mode) {
+    throw std::runtime_error("Cannot send command in the current operating mode.");
+  }
+  return send_command(command);
+}
+
 auto NucleusClient::start_measurement() -> std::future<Response>
 {
-  auto future = send_command("START", Mode::COMMAND);
+  // we don't know what mode the instrument is in on startup and can't check it programatically. instead, we just have
+  // to assume that we can send the start and stop measurement commands as if we were in the correct mode. we also
+  // can't actually check the result of this (the response doesn't have any indication of what specific command was
+  // successful), so we just have to assume that the start/stop commands are successful and update the mode accordingly
+  auto future = send_command("START");
   mode_ = Mode::MEASUREMENT;
   return future;
 }
 
 auto NucleusClient::stop_measurement() -> std::future<Response>
 {
-  auto future = send_command("STOP", Mode::MEASUREMENT);
+  // see `stop_measurement` for an explanation of the mode handling
+  auto future = send_command("STOP");
   mode_ = Mode::COMMAND;
   return future;
 }
@@ -628,7 +644,8 @@ auto NucleusClient::poll_connection() -> void
     }
 
     // we are probably in command mode here
-    if (buffer.size() == 0) {
+    if (n_read == 0) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       continue;
     }
 
@@ -642,7 +659,7 @@ auto NucleusClient::poll_connection() -> void
     if (first_sync != buffer.end()) {
       // process all data leading up to the first sync byte as ASCII data, which should contain command responses
       std::deque<std::uint8_t> ascii_data(buffer.begin(), first_sync);
-      auto [responses, ascii_erase_iter] = protocol::split_responses(ascii_data);
+      auto [responses, unused] = protocol::decode_responses(ascii_data);
       for (const auto & response : responses) {
         process_incoming_response(response);
       }
@@ -651,20 +668,20 @@ auto NucleusClient::poll_connection() -> void
       // check if the remaining buffer might have a packet. if it does, then try to decode the data and process the
       // resulting packets
       if (protocol::might_contain_packet(buffer)) {
-        auto [packets, packet_erase_iter] = protocol::decode_packets(buffer);
+        auto [packets, n_consumed] = protocol::decode_packets(buffer);
         if (!packets.empty()) {
           for (const auto & packet : packets) {
             process_incoming_packet(packet);
           }
         }
-        buffer.erase(buffer.begin(), packet_erase_iter);
+        buffer.erase(buffer.begin(), buffer.begin() + n_consumed);
       }
     } else {
-      auto [responses, ascii_erase_iter] = protocol::split_responses(buffer);
+      auto [responses, n_consumed] = protocol::decode_responses(buffer);
       for (const auto & response : responses) {
         process_incoming_response(response);
       }
-      buffer.erase(buffer.begin(), ascii_erase_iter);
+      buffer.erase(buffer.begin(), buffer.begin() + n_consumed);
     }
   }
 }

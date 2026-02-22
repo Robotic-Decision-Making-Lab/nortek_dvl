@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include "ascii.hpp"
+#include "libnucleus/response.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -27,14 +27,15 @@
 #include <string_view>
 #include <vector>
 
+#include "ascii.hpp"
+
 namespace nucleus::protocol
 {
 
-auto split_responses(std::deque<std::uint8_t> & data)
-  -> std::tuple<std::vector<Response>, std::deque<std::uint8_t>::iterator>
+auto decode_responses(const std::deque<std::uint8_t> & data) -> std::tuple<std::vector<Response>, std::size_t>
 {
   if (data.empty()) {
-    return {std::vector<Response>{}, data.end()};
+    return {std::vector<Response>{}, 0};
   }
 
   const std::string data_str(data.begin(), data.end());
@@ -49,10 +50,6 @@ auto split_responses(std::deque<std::uint8_t> & data)
 
   update_last_index(data_str.rfind(SUCCESS_TERMINATOR), SUCCESS_TERMINATOR.size());
   update_last_index(data_str.rfind(ERROR_TERMINATOR), ERROR_TERMINATOR.size());
-
-  if (last_index == std::string::npos) {
-    return {std::vector<Response>{}, data.begin()};
-  }
 
   std::vector<Response> responses;
 
@@ -76,8 +73,7 @@ auto split_responses(std::deque<std::uint8_t> & data)
     }
   }
 
-  const auto next_iter = data.begin() + last_index;
-  return {responses, next_iter};
+  return {responses, last_index};
 }
 
 }  // namespace nucleus::protocol

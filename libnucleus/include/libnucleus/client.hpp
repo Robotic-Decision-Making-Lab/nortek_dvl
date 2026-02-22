@@ -535,6 +535,9 @@ public:
 
 private:
   /// Send a command to the instrument and return a future for the command response.
+  [[nodiscard]] auto send_command(const std::string & command) -> std::future<Response>;
+
+  /// Send a command to the instrument while checking the required mode.
   [[nodiscard]] auto send_command(const std::string & command, Mode required_mode) -> std::future<Response>;
 
   /// Poll the connection for incoming data.
@@ -560,7 +563,6 @@ private:
   std::unordered_map<std::type_index, std::vector<std::function<void(const void *)>>> callbacks_;
   std::mutex callback_mutex_;
 
-  bool command_interface_available_{false};
   Mode mode_{Mode::COMMAND};
 };
 

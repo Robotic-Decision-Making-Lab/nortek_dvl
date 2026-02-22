@@ -75,17 +75,12 @@ namespace protocol
 const std::uint8_t SYNC_BYTE = 0xA5;
 
 /// Check if the given data might contain a valid packet.
-///
-/// This is a quick check that we use to determine whether or not we should attempt to decode the data into a packet.
 [[nodiscard]] auto might_contain_packet(const std::deque<std::uint8_t> & data) -> bool;
 
 /// Decode all packets from a byte array. This returns a vector of all decoded packets and an iterator pointing to the
 /// end of the last decoded packet. This can be used to remove the decoded data from the buffer.
-///
-/// Note that we could technically remove the decoded data from the buffer inside this function, but I felt like that
-/// was over-extending the responsibility of this function.
-[[nodiscard]] auto decode_packets(std::deque<std::uint8_t> & data)
-  -> std::tuple<std::vector<Packet>, std::deque<std::uint8_t>::iterator>;
+[[nodiscard]] auto decode_packets(const std::deque<std::uint8_t> & data)
+  -> std::tuple<std::vector<Packet>, std::size_t>;
 
 }  // namespace protocol
 
