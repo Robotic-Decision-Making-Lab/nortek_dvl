@@ -19,6 +19,31 @@ nucleus_driver:
 
   frame_id:
     type: string
-    default_value: "dvl_link"
+    default_value: "odom_ned"
     description: "The frame ID of the DVL."
     read_only: true
+
+  child_frame_id:
+    type: string
+    default_value: "dvl_link"
+    description: "The child frame ID of the DVL (used for odometry)."
+    read_only: true
+
+  ins_covariance:
+    type: double_array
+    default_value: 
+      - 0.1 # x
+      - 0.1 # y
+      - 0.1 # z
+      - 0.1 # rotation about x-axis
+      - 0.1 # rotation about y-axis
+      - 0.1 # rotation about z-axis
+      - 0.1 # vx
+      - 0.1 # vy
+      - 0.1 # vz
+      - 0.1 # wx
+      - 0.1 # wy
+      - 0.1 # wz
+    description: "The covariance of the DVL INS measurements."
+    validation:
+      fixed_size<>: 12

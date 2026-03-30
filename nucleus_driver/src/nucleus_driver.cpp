@@ -56,8 +56,27 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
   }
 
   // Pre-populate the sensor state messages with known, static values
-  dvl_msg_.header.frame_id = params_.frame_id;
-  twist_msg_.header.frame_id = params_.frame_id;
+  dvl_msg_.header.frame_id = params_.child_frame_id;
+  twist_msg_.header.frame_id = params_.child_frame_id;
+  odom_msg_.header.frame_id = params_.frame_id;
+  odom_msg_.child_frame_id = params_.child_frame_id;
+
+  // the INS messages don't include the covariances, so we just leave them as a configurable
+  // parameter that users can set.
+  odom_msg_.pose.covariance[0] = params_.ins_covariance[0];
+  odom_msg_.pose.covariance[7] = params_.ins_covariance[1];
+  odom_msg_.pose.covariance[14] = params_.ins_covariance[2];
+  odom_msg_.pose.covariance[21] = params_.ins_covariance[3];
+  odom_msg_.pose.covariance[28] = params_.ins_covariance[4];
+  odom_msg_.pose.covariance[35] = params_.ins_covariance[5];
+
+  odom_msg_.twist.covariance[0] = params_.ins_covariance[6];
+  odom_msg_.twist.covariance[7] = params_.ins_covariance[7];
+  odom_msg_.twist.covariance[14] = params_.ins_covariance[8];
+  odom_msg_.twist.covariance[21] = params_.ins_covariance[9];
+  odom_msg_.twist.covariance[28] = params_.ins_covariance[10];
+  odom_msg_.twist.covariance[35] = params_.ins_covariance[11];
+
   dvl_msg_.velocity_mode = marine_acoustic_msgs::msg::Dvl::DVL_MODE_BOTTOM;
   dvl_msg_.dvl_type = marine_acoustic_msgs::msg::Dvl::DVL_TYPE_PISTON;  // 3-beam convex Janus array
 
@@ -85,6 +104,7 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
 
   dvl_pub_ = create_publisher<marine_acoustic_msgs::msg::Dvl>("~/raw", rclcpp::SystemDefaultsQoS());
   twist_pub_ = create_publisher<geometry_msgs::msg::TwistWithCovarianceStamped>("~/twist", rclcpp::SystemDefaultsQoS());
+  odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("~/odom", rclcpp::SystemDefaultsQoS());
 
   client_->subscribe<BottomTrackReport>([this](const BottomTrackReport & report) -> void {
     twist_msg_.header.stamp = rclcpp::Time(report.timestamp.count());
@@ -134,6 +154,28 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
   // the Nucleus packs the altimeter data into a separate report - we just need it for altitude readings
   client_->subscribe<AltimeterReport>(
     [this](const AltimeterReport & report) -> void { dvl_msg_.altitude = report.distance; });
+
+  client_->subscribe<INSReport>([this](const INSReport & report) -> void {
+    odom_msg_.header.stamp = rclcpp::Time(report.timestamp.count());
+    odom_msg_.pose.pose.position.x = report.x;
+    odom_msg_.pose.pose.position.y = report.y;
+    odom_msg_.pose.pose.position.z = report.z;
+
+    odom_msg_.pose.pose.orientation.x = report.orientation.x();
+    odom_msg_.pose.pose.orientation.y = report.orientation.y();
+    odom_msg_.pose.pose.orientation.z = report.orientation.z();
+    odom_msg_.pose.pose.orientation.w = report.orientation.w();
+
+    // We don't have velocity data in the INS report, so we'll leave that part of the message empty for state estimators to fill in
+    odom_msg_.twist.twist.linear.x = report.vx;
+    odom_msg_.twist.twist.linear.y = report.vy;
+    odom_msg_.twist.twist.linear.z = report.vz;
+    odom_msg_.twist.twist.angular.x = report.wx;
+    odom_msg_.twist.twist.angular.y = report.wy;
+    odom_msg_.twist.twist.angular.z = report.wz;
+
+    odom_pub_->publish(odom_msg_);
+  });
 
   RCLCPP_INFO(get_logger(), "NucleusDriver loaded successfully");
 

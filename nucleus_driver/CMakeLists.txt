@@ -16,6 +16,7 @@ find_package(rclcpp_components REQUIRED)
 find_package(libnucleus REQUIRED)
 find_package(ament_cmake REQUIRED)
 find_package(generate_parameter_library REQUIRED)
+find_package(nav_msgs REQUIRED)
 
 generate_parameter_library(nucleus_driver_parameters
     src/nucleus_driver_parameters.yaml
@@ -43,6 +44,7 @@ target_link_libraries(
         libnucleus::libnucleus
         ${geometry_msgs_TARGETS}
         ${marine_acoustic_msgs_TARGETS}
+        ${nav_msgs_TARGETS}
 )
 
 rclcpp_components_register_node(nucleus_driver_library
@@ -69,6 +71,7 @@ ament_export_dependencies(
     "marine_acoustic_msgs"
     "rclcpp_components"
     "libnucleus"
+    "nav_msgs"
 )
 
 ament_package()

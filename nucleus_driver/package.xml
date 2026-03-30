@@ -16,6 +16,7 @@
 
   <depend>marine_acoustic_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
   <depend>libnucleus</depend>
   <depend>generate_parameter_library</depend>
   <depend>rclcpp_components</depend>
