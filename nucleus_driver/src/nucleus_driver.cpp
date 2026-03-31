@@ -107,7 +107,7 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
   odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("~/odom", rclcpp::SystemDefaultsQoS());
 
   client_->subscribe<BottomTrackReport>([this](const BottomTrackReport & report) -> void {
-    twist_msg_.header.stamp = rclcpp::Time(report.timestamp.count());
+    twist_msg_.header.stamp = this->get_clock()->now();
 
     dvl_msg_.velocity.x = report.vx;
     dvl_msg_.velocity.y = report.vy;
@@ -136,7 +136,7 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
 
   // much of the following code could be moved into the above callback, but we separate it to improve readability
   client_->subscribe<BottomTrackReport>([this](const BottomTrackReport & report) -> void {
-    twist_msg_.header.stamp = rclcpp::Time(report.timestamp.count());
+    twist_msg_.header.stamp = this->get_clock()->now();
 
     twist_msg_.twist.twist.linear.x = report.vx;
     twist_msg_.twist.twist.linear.y = report.vy;
@@ -156,7 +156,7 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
     [this](const AltimeterReport & report) -> void { dvl_msg_.altitude = report.distance; });
 
   client_->subscribe<INSReport>([this](const INSReport & report) -> void {
-    odom_msg_.header.stamp = rclcpp::Time(report.timestamp.count());
+    odom_msg_.header.stamp = this->get_clock()->now();
     odom_msg_.pose.pose.position.x = report.x;
     odom_msg_.pose.pose.position.y = report.y;
     odom_msg_.pose.pose.position.z = report.z;
@@ -166,7 +166,8 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
     odom_msg_.pose.pose.orientation.z = report.orientation.z();
     odom_msg_.pose.pose.orientation.w = report.orientation.w();
 
-    // We don't have velocity data in the INS report, so we'll leave that part of the message empty for state estimators to fill in
+    // We don't have velocity data in the INS report, so we'll leave that part of the message empty for state estimators
+    // to fill in
     odom_msg_.twist.twist.linear.x = report.vx;
     odom_msg_.twist.twist.linear.y = report.vy;
     odom_msg_.twist.twist.linear.z = report.vz;
