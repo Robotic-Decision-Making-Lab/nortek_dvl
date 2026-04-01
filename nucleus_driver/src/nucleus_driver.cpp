@@ -192,8 +192,11 @@ auto NucleusDriver::on_activate(const rclcpp_lifecycle::State & /*previous_state
   // we mostly do this to reset the INS (and any other stateful processing in the Nucleus)
   std::future<Response> stop_future = client_->stop_measurement();
   switch (stop_future.wait_for(std::chrono::seconds(1))) {
-    case std::future_status::ready:
+    case std::future_status::ready: {
+      auto result = stop_future.get();
+      RCLCPP_DEBUG(get_logger(), "Stop measurement response: %s", result.success ? "success" : "failure");
       break;
+    }
     case std::future_status::timeout:
       RCLCPP_WARN(get_logger(), "Stop measurement attempt timed out: the Nucleus may not have been streaming");
       break;
@@ -205,7 +208,11 @@ auto NucleusDriver::on_activate(const rclcpp_lifecycle::State & /*previous_state
   RCLCPP_DEBUG(get_logger(), "Starting measurement");
   std::future<Response> start_future = client_->start_measurement();
   switch (start_future.wait_for(std::chrono::seconds(1))) {
-    case std::future_status::ready:
+    case std::future_status::ready: {
+      auto result = start_future.get();
+      RCLCPP_DEBUG(get_logger(), "Start measurement response: %s", result.success ? "success" : "failure");
+      break;
+    }
       break;
     case std::future_status::timeout:
       RCLCPP_WARN(get_logger(), "Start measurement attempt timed out: the Nucleus may already be streaming");
