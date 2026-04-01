@@ -185,10 +185,26 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
 
 auto NucleusDriver::on_activate(const rclcpp_lifecycle::State & /*previous_state*/) -> CallbackReturn
 {
-  std::future<Response> f = client_->start_measurement();
-  std::future_status status = f.wait_for(std::chrono::seconds(1));
+  RCLCPP_DEBUG(get_logger(), "Activating the NucleusDriver");
+  RCLCPP_DEBUG(get_logger(), "Stopping previous data streams to reset the DVL");
 
-  switch (status = f.wait_for(std::chrono::seconds(1))) {
+  // stop measurement first in case the Nucleus is already streaming from a previous run
+  // we mostly do this to reset the INS (and any other stateful processing in the Nucleus)
+  std::future<Response> stop_future = client_->stop_measurement();
+  switch (stop_future.wait_for(std::chrono::seconds(1))) {
+    case std::future_status::ready:
+      break;
+    case std::future_status::timeout:
+      RCLCPP_WARN(get_logger(), "Stop measurement attempt timed out: the Nucleus may not have been streaming");
+      break;
+    default:
+      RCLCPP_ERROR(get_logger(), "Failed to stop measurement: an unexpected error occurred");
+      return CallbackReturn::ERROR;
+  }
+
+  RCLCPP_DEBUG(get_logger(), "Starting measurement");
+  std::future<Response> start_future = client_->start_measurement();
+  switch (start_future.wait_for(std::chrono::seconds(1))) {
     case std::future_status::ready:
       break;
     case std::future_status::timeout:
