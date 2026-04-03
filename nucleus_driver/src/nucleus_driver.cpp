@@ -157,9 +157,11 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
 
   client_->subscribe<INSReport>([this](const INSReport & report) -> void {
     odom_msg_.header.stamp = this->get_clock()->now();
-    odom_msg_.pose.pose.position.x = report.x;
-    odom_msg_.pose.pose.position.y = report.y;
-    odom_msg_.pose.pose.position.z = report.z;
+    // -0.219013 -0.107500 -0.179057
+    // TODO: THIS IS A HACK!
+    odom_msg_.pose.pose.position.x = report.x - 0.219013;
+    odom_msg_.pose.pose.position.y = report.y - 0.107500;
+    odom_msg_.pose.pose.position.z = report.z - 0.179057;
 
     odom_msg_.pose.pose.orientation.x = report.orientation.x();
     odom_msg_.pose.pose.orientation.y = report.orientation.y();

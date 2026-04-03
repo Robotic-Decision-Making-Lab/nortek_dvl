@@ -29,6 +29,12 @@ nucleus_driver:
     description: "The child frame ID of the DVL (used for odometry)."
     read_only: true
 
+  base_frame_id:
+    type: string
+    default_value: "base_link"
+    description: "The body frame of the vehicle. Transform the INS pose measurements to this frame."
+    read_only: true
+
   ins_covariance:
     type: double_array
     default_value: 
