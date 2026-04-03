@@ -23,7 +23,9 @@
 #include <algorithm>
 #include <iostream>
 #include <ranges>
+#include <span>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "checksum.hpp"
@@ -51,7 +53,7 @@ auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet
   }
 
   // don't ask me why nortek does this, just accept it and move on.
-  const std::vector<std::uint8_t> header_data = {data.begin(), data.begin() + 10};
+  const std::vector<std::uint8_t> header_data(data.begin(), data.begin() + 10);
   const std::uint8_t header_size = header_data[1];
   const std::uint8_t series_id = header_data[2];
   const std::uint8_t family_id = header_data[3];
@@ -59,13 +61,13 @@ auto decode_packet(const std::vector<std::uint8_t> & data) -> Packet
   const std::uint16_t data_checksum = header_data[6] | (static_cast<std::uint16_t>(header_data[7]) << 8);
   const std::uint16_t header_checksum = header_data[8] | (static_cast<std::uint16_t>(header_data[9]) << 8);
 
-  const std::vector<std::uint8_t> packet_data = {data.begin() + header_size, data.end()};
+  const std::vector<std::uint8_t> packet_data(data.begin() + header_size, data.end());
 
   if (packet_data.size() != data_size) {
     throw std::invalid_argument("Data size does not match the size specified in the header.");
   }
 
-  if (!protocol::checksum({header_data.begin(), header_data.end() - 2}, header_checksum)) {
+  if (!protocol::checksum(std::vector<std::uint8_t>(header_data.begin(), header_data.end() - 2), header_checksum)) {
     throw std::invalid_argument("Header checksum does not match the calculated checksum.");
   }
 
@@ -102,7 +104,8 @@ auto might_contain_packet(const std::deque<std::uint8_t> & data) -> bool
   if (data.size() < 6) {
     return false;
   }
-  return data.size() >= calculate_packet_size({data.begin(), data.end()});
+
+  return data.size() >= calculate_packet_size(std::vector<std::uint8_t>(data.begin(), data.end()));
 }
 
 auto decode_packets(const std::deque<std::uint8_t> & data) -> std::tuple<std::vector<Packet>, std::size_t>
@@ -123,14 +126,13 @@ auto decode_packets(const std::deque<std::uint8_t> & data) -> std::tuple<std::ve
 
     std::size_t expected_size;
     try {
-      expected_size = calculate_packet_size({start, next});
+      expected_size = calculate_packet_size(std::vector<std::uint8_t>(start, next));
     }
     catch (const std::exception & e) {
       break;  // we don't have a full packet yet, so wait for more data to arrive
     }
-    const std::size_t packet_distance = std::distance(start, next) - expected_size;
 
-    if (packet_distance <= 0) {
+    if (std::cmp_greater_equal(expected_size, std::distance(start, next))) {
       // we have two contiguous packets in the buffer, so we can attempt to decode multiple packets at once.
       // note that we set the packet data to be everything between the current sync byte and the next, disregarding
       // the expected size. this is because the expected size may be incorrect.
@@ -145,14 +147,15 @@ auto decode_packets(const std::deque<std::uint8_t> & data) -> std::tuple<std::ve
     } else {
       // there is some data between the current sync byte and the next. we need to let the polling function extract
       // that ascii data before we attempt to decode any additional packets, so just extract the first packet
-      const std::vector<std::uint8_t> packet_data(start, start + expected_size);
+      const auto safe_end = std::min(start + expected_size, data.end());
+      const std::vector<std::uint8_t> packet_data(start, safe_end);
       try {
         packets.push_back(decode_packet(packet_data));
       }
       catch (const std::exception & e) {  // NOLINT
         // decoding error - just ignore it
       }
-      erase_iter = start + expected_size;
+      erase_iter = safe_end;
       break;
     }
 
