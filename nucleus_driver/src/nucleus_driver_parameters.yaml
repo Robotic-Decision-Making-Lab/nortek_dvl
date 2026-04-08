@@ -41,9 +41,9 @@ nucleus_driver:
       - 0.1 # x
       - 0.1 # y
       - 0.1 # z
-      - 0.1 # rotation about x-axis
-      - 0.1 # rotation about y-axis
-      - 0.1 # rotation about z-axis
+      - 0.05 # rotation about x-axis
+      - 0.05 # rotation about y-axis
+      - 0.05 # rotation about z-axis
       - 0.1 # vx
       - 0.1 # vy
       - 0.1 # vz

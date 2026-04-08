@@ -17,6 +17,7 @@ find_package(libnucleus REQUIRED)
 find_package(ament_cmake REQUIRED)
 find_package(generate_parameter_library REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 generate_parameter_library(nucleus_driver_parameters
     src/nucleus_driver_parameters.yaml
@@ -42,6 +43,7 @@ target_link_libraries(
         rclcpp_components::component
         rclcpp_components::component_manager
         libnucleus::libnucleus
+        tf2_geometry_msgs::tf2_geometry_msgs
         ${geometry_msgs_TARGETS}
         ${marine_acoustic_msgs_TARGETS}
         ${nav_msgs_TARGETS}
@@ -72,6 +74,7 @@ ament_export_dependencies(
     "rclcpp_components"
     "libnucleus"
     "nav_msgs"
+    "tf2_geometry_msgs"
 )
 
 ament_package()

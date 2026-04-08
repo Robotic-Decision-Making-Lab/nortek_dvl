@@ -18,4 +18,6 @@ nucleus_driver_node:
     # - y: Right
     # - z: Down
     # This can be rotated using the mounting_rotation_offset parameter.
-    frame_id: "dvl_link"
+    frame_id: "odom"
+    base_frame_id: "base_link"
+    child_frame_id: "base_link"

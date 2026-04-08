@@ -24,6 +24,7 @@
 
 #include "libnucleus/report.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 namespace nucleus::ros
 {
@@ -156,26 +157,103 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
     [this](const AltimeterReport & report) -> void { dvl_msg_.altitude = report.distance; });
 
   client_->subscribe<INSReport>([this](const INSReport & report) -> void {
+    auto new_report = report;  // make a copy of the report so we don't modify the original data from the Nucleus
+
+    // KDL::Rotation R_odom(0, 1, 0,
+    //                     1, 0, 0,
+    //                     0, 0, -1);
+    auto q_odom = KDL::Rotation::Quaternion(0, 1, 0, 0);
+    KDL::Vector t_odom(0, 0, 0);
+    KDL::Frame t_odom_odom_ned(q_odom, t_odom);
+
+    // DVL pose in odom_ned
+    KDL::Frame pose_dvl(
+        KDL::Rotation::Quaternion(
+            report.orientation.x(),
+            report.orientation.y(),
+            report.orientation.z(),
+            report.orientation.w()),
+        KDL::Vector(report.x, report.y, report.z));
+
+    // Transform: base_link -> dvl_link (your TF)
+    KDL::Rotation R_base_to_dvl(-1, 0, 0,
+                                0, 1, 0,
+                                0, 0, -1);
+    KDL::Vector t_base_to_dvl(-0.219, -0.107, -0.179);
+    KDL::Frame tf_base_to_dvl(R_base_to_dvl, t_base_to_dvl);
+
+    // Inverse: dvl_link -> base_link
+    KDL::Frame tf_dvl_to_base = tf_base_to_dvl.Inverse();
+
+    // Pose of base_link in odom_ned
+    KDL::Frame pose_base_in_odom_ned = pose_dvl * tf_dvl_to_base;
+
+    // Transform from odom_ned to odom (aligned with base_link)
+    KDL::Frame tf_odom_ned_to_odom(R_base_to_dvl, KDL::Vector::Zero());
+
+    // Final pose: base_link in odom
+    KDL::Frame pose_final = pose_base_in_odom_ned;
+
+    // Extract position
+    new_report.x = pose_final.p.x();
+    new_report.y = pose_final.p.y();
+    new_report.z = pose_final.p.z();
+
+    // Extract orientation
+    double qx, qy, qz, qw;
+    pose_final.M.GetQuaternion(qx, qy, qz, qw);
+    new_report.orientation.x() = qx;
+    new_report.orientation.y() = qy;
+    new_report.orientation.z() = qz;
+    new_report.orientation.w() = qw;
+
+    // Transform twist
+    KDL::Vector linear_vel(report.vx, report.vy, report.vz);
+    KDL::Vector angular_vel(report.wx, report.wy, report.wz);
+
+    KDL::Vector linear_rotated = tf_dvl_to_base.M * linear_vel;
+    KDL::Vector angular_rotated = tf_dvl_to_base.M * angular_vel;
+
+    new_report.vx = linear_rotated.x();
+    new_report.vy = linear_rotated.y();
+    new_report.vz = linear_rotated.z();
+    new_report.wx = angular_rotated.x();
+    new_report.wy = angular_rotated.y();
+    new_report.wz = angular_rotated.z();
+
+    odom_msg_.pose.pose.position.x = new_report.x;
+    odom_msg_.pose.pose.position.y = new_report.y;
+    odom_msg_.pose.pose.position.z = new_report.z;
+
+    odom_msg_.pose.pose.orientation.x = new_report.orientation.x();
+    odom_msg_.pose.pose.orientation.y = new_report.orientation.y();
+    odom_msg_.pose.pose.orientation.z = new_report.orientation.z();
+    odom_msg_.pose.pose.orientation.w = new_report.orientation.w();
+
+    odom_msg_.twist.twist.linear.x = new_report.vx;
+    odom_msg_.twist.twist.linear.y = new_report.vy;
+    odom_msg_.twist.twist.linear.z = new_report.vz;
+    odom_msg_.twist.twist.angular.x = new_report.wx;
+    odom_msg_.twist.twist.angular.y = new_report.wy;
+    odom_msg_.twist.twist.angular.z = new_report.wz;
+
     odom_msg_.header.stamp = this->get_clock()->now();
-    // -0.219013 -0.107500 -0.179057
-    // TODO: THIS IS A HACK!
-    odom_msg_.pose.pose.position.x = report.x - 0.219013;
-    odom_msg_.pose.pose.position.y = report.y - 0.107500;
-    odom_msg_.pose.pose.position.z = report.z - 0.179057;
 
-    odom_msg_.pose.pose.orientation.x = report.orientation.x();
-    odom_msg_.pose.pose.orientation.y = report.orientation.y();
-    odom_msg_.pose.pose.orientation.z = report.orientation.z();
-    odom_msg_.pose.pose.orientation.w = report.orientation.w();
+    // odom_msg_.pose.pose.position.x = report.x - 0.219013;
+    // odom_msg_.pose.pose.position.y = report.y - 0.107500;
+    // odom_msg_.pose.pose.position.z = report.z - 0.179057;
 
-    // We don't have velocity data in the INS report, so we'll leave that part of the message empty for state estimators
-    // to fill in
-    odom_msg_.twist.twist.linear.x = report.vx;
-    odom_msg_.twist.twist.linear.y = report.vy;
-    odom_msg_.twist.twist.linear.z = report.vz;
-    odom_msg_.twist.twist.angular.x = report.wx;
-    odom_msg_.twist.twist.angular.y = report.wy;
-    odom_msg_.twist.twist.angular.z = report.wz;
+    // odom_msg_.pose.pose.orientation.x = report.orientation.x();
+    // odom_msg_.pose.pose.orientation.y = report.orientation.y();
+    // odom_msg_.pose.pose.orientation.z = report.orientation.z();
+    // odom_msg_.pose.pose.orientation.w = report.orientation.w();
+
+    // odom_msg_.twist.twist.linear.x = report.vx;
+    // odom_msg_.twist.twist.linear.y = report.vy;
+    // odom_msg_.twist.twist.linear.z = report.vz;
+    // odom_msg_.twist.twist.angular.x = report.wx;
+    // odom_msg_.twist.twist.angular.y = report.wy;
+    // odom_msg_.twist.twist.angular.z = report.wz;
 
     odom_pub_->publish(odom_msg_);
   });
