@@ -136,6 +136,7 @@ auto decode_packets(const std::deque<std::uint8_t> & data) -> std::tuple<std::ve
       // we have two contiguous packets in the buffer, so we can attempt to decode multiple packets at once.
       // note that we set the packet data to be everything between the current sync byte and the next, disregarding
       // the expected size. this is because the expected size may be incorrect.
+      // const std::vector<std::uint8_t> packet_data(start, next);
       const std::vector<std::uint8_t> packet_data(start, next);
       try {
         packets.push_back(decode_packet(packet_data));
@@ -155,7 +156,8 @@ auto decode_packets(const std::deque<std::uint8_t> & data) -> std::tuple<std::ve
       catch (const std::exception & e) {  // NOLINT
         // decoding error - just ignore it
       }
-      erase_iter = safe_end;
+      // erase_iter = start + expected_size;
+      erase_iter = std::min(start + expected_size, data.end());
       break;
     }
 
