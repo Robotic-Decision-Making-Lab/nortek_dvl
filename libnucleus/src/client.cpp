@@ -671,7 +671,11 @@ auto NucleusClient::poll_connection() -> void
         auto [packets, n_consumed] = protocol::decode_packets(buffer);
         if (!packets.empty()) {
           for (const auto & packet : packets) {
-            process_incoming_packet(packet);
+            try {
+              process_incoming_packet(packet);
+            } catch (const std::exception & e) {
+              std::cout << "Failed to process packet: " << e.what() << "\n";
+            }
           }
         }
         buffer.erase(buffer.begin(), buffer.begin() + n_consumed);

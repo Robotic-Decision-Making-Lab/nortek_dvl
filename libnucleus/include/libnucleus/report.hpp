@@ -506,8 +506,8 @@ struct Deserializer<MagnetometerReport>
 
     protocol::erase(before, 12);  // IMU data starts after 12 bytes
 
-    // deserialize everything before the offset
-    report.is_compensated_for_hard_iron = protocol::check_flag(protocol::pop<std::uint32_t>(after), 0);
+    // deserialize the flags before the offset
+    report.is_compensated_for_hard_iron = protocol::check_flag(protocol::pop<std::uint32_t>(before), 0);
 
     // deserialize everything after the offset
     report.mx = protocol::pop<float>(after);
