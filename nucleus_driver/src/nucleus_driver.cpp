@@ -55,9 +55,14 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
     return CallbackReturn::ERROR;
   }
 
-  // Pre-populate the sensor state messages with known, static values
-  dvl_msg_.header.frame_id = params_.frame_id;
-  twist_msg_.header.frame_id = params_.frame_id;
+  // pre-populate the sensor state messages with known, static values.
+  twist_msg_.header.frame_id = params_.child_frame_id;
+
+  // the INS system doesn't report the covariances, so we don't set them
+  odom_msg_.header.frame_id = params_.frame_id;
+  odom_msg_.child_frame_id = params_.child_frame_id;
+
+  dvl_msg_.header.frame_id = params_.child_frame_id;
   dvl_msg_.velocity_mode = marine_acoustic_msgs::msg::Dvl::DVL_MODE_BOTTOM;
   dvl_msg_.dvl_type = marine_acoustic_msgs::msg::Dvl::DVL_TYPE_PISTON;  // 3-beam convex Janus array
 
@@ -85,9 +90,14 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
 
   dvl_pub_ = create_publisher<marine_acoustic_msgs::msg::Dvl>("~/raw", rclcpp::SystemDefaultsQoS());
   twist_pub_ = create_publisher<geometry_msgs::msg::TwistWithCovarianceStamped>("~/twist", rclcpp::SystemDefaultsQoS());
+  odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("~/odom", rclcpp::SystemDefaultsQoS());
+
+  // NOTE: in the following callbacks, we set the header timestamp to the system time instead of the report time.
+  // the DVL time can be desynchronized from the system time, so downstream users of these messages (e.g., state
+  // estimators) may reject the messages because of the time offset
 
   client_->subscribe<BottomTrackReport>([this](const BottomTrackReport & report) -> void {
-    twist_msg_.header.stamp = rclcpp::Time(report.timestamp.count());
+    twist_msg_.header.stamp = this->get_clock()->now();
 
     dvl_msg_.velocity.x = report.vx;
     dvl_msg_.velocity.y = report.vy;
@@ -116,7 +126,7 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
 
   // much of the following code could be moved into the above callback, but we separate it to improve readability
   client_->subscribe<BottomTrackReport>([this](const BottomTrackReport & report) -> void {
-    twist_msg_.header.stamp = rclcpp::Time(report.timestamp.count());
+    twist_msg_.header.stamp = this->get_clock()->now();
 
     twist_msg_.twist.twist.linear.x = report.vx;
     twist_msg_.twist.twist.linear.y = report.vy;
@@ -135,6 +145,27 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
   client_->subscribe<AltimeterReport>(
     [this](const AltimeterReport & report) -> void { dvl_msg_.altitude = report.distance; });
 
+  client_->subscribe<INSReport>([this](const INSReport & report) -> void {
+    odom_msg_.header.stamp = this->get_clock()->now();
+    odom_msg_.pose.pose.position.x = report.x;
+    odom_msg_.pose.pose.position.y = report.y;
+    odom_msg_.pose.pose.position.z = report.z;
+
+    odom_msg_.pose.pose.orientation.x = report.orientation.x();
+    odom_msg_.pose.pose.orientation.y = report.orientation.y();
+    odom_msg_.pose.pose.orientation.z = report.orientation.z();
+    odom_msg_.pose.pose.orientation.w = report.orientation.w();
+
+    odom_msg_.twist.twist.linear.x = report.vx;
+    odom_msg_.twist.twist.linear.y = report.vy;
+    odom_msg_.twist.twist.linear.z = report.vz;
+    odom_msg_.twist.twist.angular.x = report.wx;
+    odom_msg_.twist.twist.angular.y = report.wy;
+    odom_msg_.twist.twist.angular.z = report.wz;
+
+    odom_pub_->publish(odom_msg_);
+  });
+
   RCLCPP_INFO(get_logger(), "NucleusDriver loaded successfully");
 
   return CallbackReturn::SUCCESS;
@@ -142,12 +173,34 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
 
 auto NucleusDriver::on_activate(const rclcpp_lifecycle::State & /*previous_state*/) -> CallbackReturn
 {
-  std::future<Response> f = client_->start_measurement();
-  std::future_status status = f.wait_for(std::chrono::seconds(1));
+  RCLCPP_DEBUG(get_logger(), "Activating the NucleusDriver");
+  RCLCPP_DEBUG(get_logger(), "Stopping previous data streams to reset the DVL");
 
-  switch (status = f.wait_for(std::chrono::seconds(1))) {
-    case std::future_status::ready:
+  // stop measurements first in case the Nucleus is already streaming from a previous run
+  // we mostly do this to reset the INS
+  std::future<Response> stop_future = client_->stop_measurement();
+  switch (stop_future.wait_for(std::chrono::seconds(1))) {
+    case std::future_status::ready: {
+      auto result = stop_future.get();
+      RCLCPP_DEBUG(get_logger(), "Stop measurement response: %s", result.success ? "success" : "failure");
       break;
+    }
+    case std::future_status::timeout:
+      RCLCPP_WARN(get_logger(), "Stop measurement attempt timed out: the Nucleus may not have been streaming");
+      break;
+    default:
+      RCLCPP_ERROR(get_logger(), "Failed to stop measurement: an unexpected error occurred");
+      return CallbackReturn::ERROR;
+  }
+
+  RCLCPP_DEBUG(get_logger(), "Starting measurement");
+  std::future<Response> start_future = client_->start_measurement();
+  switch (start_future.wait_for(std::chrono::seconds(1))) {
+    case std::future_status::ready: {
+      auto result = start_future.get();
+      RCLCPP_DEBUG(get_logger(), "Start measurement response: %s", result.success ? "success" : "failure");
+      break;
+    }
     case std::future_status::timeout:
       RCLCPP_WARN(get_logger(), "Start measurement attempt timed out: the Nucleus may already be streaming");
       break;

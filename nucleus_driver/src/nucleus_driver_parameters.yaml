@@ -19,6 +19,12 @@ nucleus_driver:
 
     frame_id:
         type: string
+        default_value: "odom_ned"
+        description: "The inertial frame ID."
+        read_only: true
+
+    child_frame_id:
+        type: string
         default_value: "dvl_link"
         description: "The frame ID of the DVL."
         read_only: true
