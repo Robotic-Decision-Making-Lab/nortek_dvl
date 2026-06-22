@@ -21,7 +21,6 @@
 #include "checksum.hpp"
 
 #include <cstdint>
-#include <iostream>
 #include <vector>
 
 namespace nucleus::protocol

@@ -23,7 +23,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <deque>
-#include <string>
 #include <vector>
 
 #include "libnucleus/family_id.hpp"
@@ -37,6 +36,7 @@ struct Deserializer
 {
   static void from_data(const std::vector<std::uint8_t> & /*data*/, T & /*value*/)
   {
+    // TODO(evan-palmer): convert to `std::println` once supported by the compiler
     std::printf("No deserializer defined for this type.\n");
   }
 };

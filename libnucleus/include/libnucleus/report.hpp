@@ -319,7 +319,7 @@ namespace protocol
 {
 
 /// Removed the specified number of bytes from the front of the data vector.
-auto erase(std::vector<std::uint8_t> & data, std::size_t num_bytes) -> void
+auto inline erase(std::vector<std::uint8_t> & data, std::size_t num_bytes) -> void
 {
   if (data.size() < num_bytes) {
     throw std::invalid_argument("Cannot remove more bytes than are present in the data.");
@@ -344,14 +344,14 @@ template <typename T>
 }
 
 /// Unpack the common data fields from the beginning of a data vector.
-auto unpack_common_data(std::vector<std::uint8_t> data, CommonData & common_data)
+auto inline unpack_common_data(std::vector<std::uint8_t> data, CommonData & common_data)
 {
   // unpack the version and data offset
   common_data.version = pop<std::uint8_t>(data);
   common_data.data_offset = pop<std::uint8_t>(data);
 
   // unpack the flags - the first bit indicates whether POSIX time is used
-  const std::uint8_t flags = pop<std::uint8_t>(data);
+  const auto flags = pop<std::uint8_t>(data);
   common_data.posix_time = (flags & 0x01) != 0;
 
   // skip the spare byte at this point
@@ -366,7 +366,7 @@ auto unpack_common_data(std::vector<std::uint8_t> data, CommonData & common_data
 }
 
 /// Split the data vector at the given offset.
-auto split_data(const std::vector<std::uint8_t> & data, std::uint8_t offset)
+auto inline split_data(const std::vector<std::uint8_t> & data, std::uint8_t offset)
   -> std::pair<std::vector<std::uint8_t>, std::vector<std::uint8_t>>
 {
   if (data.size() < offset) {
@@ -380,7 +380,7 @@ auto split_data(const std::vector<std::uint8_t> & data, std::uint8_t offset)
 }
 
 /// Check the value of the flag at the provided bit.
-auto check_flag(std::uint32_t status, std::size_t bit) -> bool { return (status & (1U << bit)) != 0; }
+auto inline check_flag(std::uint32_t status, std::size_t bit) -> bool { return (status & (1U << bit)) != 0; }
 
 }  // namespace protocol
 
@@ -410,10 +410,10 @@ struct Deserializer<AHRSReport>
     // deserialize everything after the offset
     protocol::erase(after, 3 * sizeof(float));  // roll, pitch, yaw
 
-    const float w = protocol::pop<float>(after);
-    const float x = protocol::pop<float>(after);
-    const float y = protocol::pop<float>(after);
-    const float z = protocol::pop<float>(after);
+    const auto w = protocol::pop<float>(after);
+    const auto x = protocol::pop<float>(after);
+    const auto y = protocol::pop<float>(after);
+    const auto z = protocol::pop<float>(after);
     report.orientation = Eigen::Quaternionf(w, x, y, z);
 
     protocol::erase(after, 9 * sizeof(float));  // rotation matrix

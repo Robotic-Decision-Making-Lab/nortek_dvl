@@ -20,8 +20,6 @@
 
 #pragma once
 
-#include <string>
-
 constexpr int NORTEK_NUCLEUS_PROTOCOL_VERSION_VERSION = 2025;
 constexpr int NORTEK_NUCLEUS_PROTOCOL_VERSION_REVISION = 2;
 

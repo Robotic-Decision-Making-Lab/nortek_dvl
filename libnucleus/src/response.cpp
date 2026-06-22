@@ -21,7 +21,6 @@
 #include "libnucleus/response.hpp"
 
 #include <cstdint>
-#include <iostream>
 #include <ranges>
 #include <string>
 #include <string_view>

@@ -95,11 +95,11 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
     dvl_msg_.beam_ranges_valid = true;
     dvl_msg_.beam_velocities_valid = report.velocity_valid;
     dvl_msg_.course_gnd = std::atan2(report.vy, report.vx);
-    dvl_msg_.speed_gnd = std::sqrt(report.vx * report.vx + report.vy * report.vy);
+    dvl_msg_.speed_gnd = std::sqrt((report.vx * report.vx) + (report.vy * report.vy));
 
     for (std::size_t i = 0; i < 3; ++i) {
       for (std::size_t j = 0; j < 3; ++j) {
-        dvl_msg_.velocity_covar[i * 3 + j] = report.covariance(i, j);
+        dvl_msg_.velocity_covar[(i * 3) + j] = report.covariance(i, j);
       }
     }
 
@@ -124,7 +124,7 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
 
     for (std::size_t i = 0; i < 3; ++i) {
       for (std::size_t j = 0; j < 3; ++j) {
-        twist_msg_.twist.covariance[i * 6 + j] = report.covariance(i, j);
+        twist_msg_.twist.covariance[(i * 6) + j] = report.covariance(i, j);
       }
     }
 

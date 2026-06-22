@@ -21,7 +21,6 @@
 #pragma once
 
 #include <chrono>
-#include <cstdint>
 #include <deque>
 #include <future>
 #include <string>
@@ -32,7 +31,6 @@
 #include "libnucleus/mode.hpp"
 #include "libnucleus/packet.hpp"
 #include "libnucleus/response.hpp"
-#include "libnucleus/series_id.hpp"
 
 namespace nucleus
 {
@@ -40,7 +38,7 @@ namespace nucleus
 class NucleusClient
 {
 public:
-  NucleusClient(const std::string & addr, std::chrono::seconds connection_timeout = std::chrono::seconds(5));
+  explicit NucleusClient(const std::string & addr, std::chrono::seconds connection_timeout = std::chrono::seconds(5));
 
   NucleusClient(
     const std::string & addr,

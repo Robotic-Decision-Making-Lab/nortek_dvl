@@ -1,12 +1,12 @@
 ARG ROS_DISTRO=rolling
-FROM ros:$ROS_DISTRO-ros-base AS desktop
+FROM ros:${ROS_DISTRO}-ros-base AS desktop
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /root/ws_ros
 
 ENV PROJECT_NAME=nortek_dvl
 
-COPY . src/$PROJECT_NAME
+COPY . src/${PROJECT_NAME}
 
 # Install apt packages
 RUN apt-get -q update \
@@ -27,32 +27,32 @@ RUN apt-get -q update \
 # Configure the ubuntu non-root user
 ARG USERNAME=ubuntu
 ARG USER_UID=1000
-ARG USER_GID=$USER_UID
+ARG USER_GID=${USER_UID}
 
-RUN echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME \
-    && usermod -a -G dialout $USERNAME \
-    && echo "source /usr/share/bash-completion/completions/git" >> /home/$USERNAME/.bashrc
+RUN echo ${USERNAME} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${USERNAME} \
+    && chmod 0440 /etc/sudoers.d/${USERNAME} \
+    && usermod -a -G dialout ${USERNAME} \
+    && echo "source /usr/share/bash-completion/completions/git" >> /home/${USERNAME}/.bashrc
 
 # Switch to the ubuntu user
-USER $USERNAME
-ENV USER=$USERNAME
+USER ${USERNAME}
+ENV USER=${USERNAME}
 
-ENV USER_WORKSPACE=/home/$USERNAME/ws_ros
-WORKDIR $USER_WORKSPACE
+ENV USER_WORKSPACE=/home/${USERNAME}/ws_ros
+WORKDIR ${USER_WORKSPACE}
 
-COPY --chown=$USER_UID:$USER_GID . src/$PROJECT_NAME
+COPY --chown=${USER_UID}:${USER_GID} . src/${PROJECT_NAME}
 
 # Create a new virtual environment for Python
-ENV VIRTUAL_ENV=$USER_WORKSPACE/.venv/$PROJECT_NAME
-RUN python3 -m venv --system-site-packages $VIRTUAL_ENV \
-    && echo "source ${VIRTUAL_ENV}/bin/activate" >> /home/$USERNAME/.bashrc \
+ENV VIRTUAL_ENV=${USER_WORKSPACE}/.venv/${PROJECT_NAME}
+RUN python3 -m venv --system-site-packages ${VIRTUAL_ENV} \
+    && echo "source ${VIRTUAL_ENV}/bin/activate" >> /home/${USERNAME}/.bashrc \
     && touch .venv/COLCON_IGNORE \
-    && echo "\n# Ensure colcon is run in the venv\nalias colcon='python3 -m colcon'" >> /home/$USERNAME/.bashrc
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+    && echo "\n# Ensure colcon is run in the venv\nalias colcon='python3 -m colcon'" >> /home/${USERNAME}/.bashrc
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 # Install all ROS dependencies
-WORKDIR $USER_WORKSPACE
+WORKDIR ${USER_WORKSPACE}
 RUN sudo apt-get -q update \
     && sudo apt-get -q -y upgrade \
     && rosdep update \
@@ -63,8 +63,8 @@ RUN sudo apt-get -q update \
 
 RUN . "/opt/ros/${ROS_DISTRO}/setup.sh" \
     && colcon build \
-    && echo "source ${USER_WORKSPACE}/install/setup.bash" >> /home/$USERNAME/.bashrc \
-    && echo "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then source /opt/ros/${ROS_DISTRO}/setup.bash; fi" >> /home/$USERNAME/.bashrc
+    && echo "source ${USER_WORKSPACE}/install/setup.bash" >> /home/${USERNAME}/.bashrc \
+    && echo "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then source /opt/ros/${ROS_DISTRO}/setup.bash; fi" >> /home/${USERNAME}/.bashrc
 
 # Install debugging/linting C++ packages
 RUN sudo apt-get -q update \
@@ -77,4 +77,4 @@ RUN sudo apt-get -q update \
     && sudo apt-get clean -y \
     && sudo rm -rf /var/lib/apt/lists/*
 
-WORKDIR $USER_WORKSPACE
+WORKDIR ${USER_WORKSPACE}

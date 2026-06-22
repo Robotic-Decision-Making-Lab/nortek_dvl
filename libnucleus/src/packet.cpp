@@ -21,8 +21,6 @@
 #include "libnucleus/packet.hpp"
 
 #include <algorithm>
-#include <iostream>
-#include <ranges>
 #include <stdexcept>
 #include <vector>
 
@@ -128,9 +126,9 @@ auto decode_packets(const std::deque<std::uint8_t> & data) -> std::tuple<std::ve
     catch (const std::exception & e) {
       break;  // we don't have a full packet yet, so wait for more data to arrive
     }
-    const std::size_t packet_distance = std::distance(start, next) - expected_size;
+    const auto distance_to_next = std::distance(start, next);
 
-    if (packet_distance <= 0) {
+    if (distance_to_next <= static_cast<std::ptrdiff_t>(expected_size)) {
       // we have two contiguous packets in the buffer, so we can attempt to decode multiple packets at once.
       // note that we set the packet data to be everything between the current sync byte and the next, disregarding
       // the expected size. this is because the expected size may be incorrect.
