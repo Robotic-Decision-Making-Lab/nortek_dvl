@@ -172,10 +172,40 @@ auto open(const std::string & addr, std::uint16_t port, std::chrono::seconds con
 
 }  // namespace
 
-NucleusClient::NucleusClient(const std::string & addr, std::chrono::seconds connection_timeout)
+NucleusClient::NucleusClient(
+  const std::string & addr,
+  std::chrono::seconds connection_timeout,
+  std::int8_t max_connection_attempts)
 {
-  // Open a TCP socket and connect to the DVL
-  socket_ = open(addr, 9002, connection_timeout);  // connect to the data-only port
+  const std::uint16_t port = 9002;
+  if (max_connection_attempts < 0) {
+    while (true) {
+      try {
+        socket_ = open(addr, port, connection_timeout);
+        break;
+      }
+      catch (const std::exception & e) {
+        std::cout << "Connection attempt failed: " << e.what() << ". Retrying...\n";
+      }
+    }
+  } else {
+    std::exception_ptr last_error;
+    for (std::int8_t attempt = 0; attempt < max_connection_attempts; ++attempt) {
+      try {
+        socket_ = open(addr, port, connection_timeout);
+        last_error = nullptr;
+        break;
+      }
+      catch (const std::exception & e) {
+        last_error = std::current_exception();
+        std::cout << "Connection attempt failed: " << e.what() << ". Retrying...\n";
+      }
+    }
+    if (last_error) {
+      std::rethrow_exception(last_error);
+    }
+  }
+
   running_.store(true);
   polling_thread_ = std::thread([this] -> void { poll_connection(); });
 }
@@ -183,14 +213,43 @@ NucleusClient::NucleusClient(const std::string & addr, std::chrono::seconds conn
 NucleusClient::NucleusClient(
   const std::string & addr,
   const std::string & password,
-  std::chrono::seconds connection_timeout)
+  std::chrono::seconds connection_timeout,
+  std::int8_t max_connection_attempts)
 {
-  // Open a TCP socket and connect to the DVL
-  socket_ = open(addr, 9000, connection_timeout);  // connect to the primary port
+  auto connect_and_login = [&] -> void {
+    socket_ = open(addr, 9000, connection_timeout);
+    if (!protocol::login(socket_, password)) {
+      close(socket_);
+      throw std::runtime_error("Failed to login to the DVL with the provided password.");
+    }
+  };
 
-  // Login to the DVL
-  if (!protocol::login(socket_, password)) {
-    throw std::runtime_error("Failed to login to the DVL with the provided password.");
+  if (max_connection_attempts < 0) {
+    while (true) {
+      try {
+        connect_and_login();
+        break;
+      }
+      catch (const std::exception & e) {
+        std::cout << "Connection attempt failed: " << e.what() << ". Retrying...\n";
+      }
+    }
+  } else {
+    std::exception_ptr last_error;
+    for (std::int8_t attempt = 0; attempt < max_connection_attempts; ++attempt) {
+      try {
+        connect_and_login();
+        last_error = nullptr;
+        break;
+      }
+      catch (const std::exception & e) {
+        last_error = std::current_exception();
+        std::cout << "Connection attempt failed: " << e.what() << ". Retrying...\n";
+      }
+    }
+    if (last_error) {
+      std::rethrow_exception(last_error);
+    }
   }
 
   running_.store(true);
@@ -673,7 +732,8 @@ auto NucleusClient::poll_connection() -> void
           for (const auto & packet : packets) {
             try {
               process_incoming_packet(packet);
-            } catch (const std::exception & e) {
+            }
+            catch (const std::exception & e) {
               std::cout << "Failed to process packet: " << e.what() << "\n";
             }
           }

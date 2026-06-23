@@ -12,6 +12,10 @@ nucleus_driver_node:
         # Specify a timeout for the DVL connection.
         timeout: 5 # seconds
 
+        # Specify the maximum number of connection attempts made. Set to -1
+        # to retry indefinitely.
+        max_retries: 1
+
         # The INS inertial frame is defined using the NED orientation positioned
         # at the point where the "start measurement" command is issued.
         frame_id: "odom_ned"

@@ -47,8 +47,8 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
   }
 
   try {
-    client_ =
-      std::make_unique<NucleusClient>(params_.ip_address, params_.password, std::chrono::seconds(params_.timeout));
+    client_ = std::make_unique<NucleusClient>(
+      params_.ip_address, params_.password, std::chrono::seconds(params_.timeout), params_.max_retries);
   }
   catch (const std::exception & e) {
     RCLCPP_ERROR(get_logger(), "Failed to create NucleusClient. %s", e.what());
