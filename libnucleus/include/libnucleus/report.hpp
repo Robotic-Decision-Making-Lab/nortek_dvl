@@ -387,7 +387,7 @@ auto inline check_flag(std::uint32_t status, std::size_t bit) -> bool { return (
 template <>
 struct Deserializer<AHRSReport>
 {
-  static void from_data(std::vector<std::uint8_t> data, AHRSReport & report)
+  static void from_data(std::vector<std::uint8_t> data, AHRSReport & report) // NOLINT
   {
     protocol::unpack_common_data(data, report);
 
@@ -426,7 +426,7 @@ struct Deserializer<AHRSReport>
 template <>
 struct Deserializer<INSReport>
 {
-  static void from_data(std::vector<std::uint8_t> data, INSReport & report)
+  static void from_data(std::vector<std::uint8_t> data, INSReport & report) // NOLINT
   {
     // this modifies a copy of the data
     // we pass a copy to the method, so no slicing occurs
@@ -469,7 +469,7 @@ struct Deserializer<INSReport>
 template <>
 struct Deserializer<IMUReport>
 {
-  static void from_data(std::vector<std::uint8_t> data, IMUReport & report)
+  static void from_data(std::vector<std::uint8_t> data, IMUReport & report) // NOLINT
   {
     protocol::unpack_common_data(data, report);
 
@@ -496,7 +496,7 @@ struct Deserializer<IMUReport>
 template <>
 struct Deserializer<MagnetometerReport>
 {
-  static void from_data(std::vector<std::uint8_t> data, MagnetometerReport & report)
+  static void from_data(std::vector<std::uint8_t> data, MagnetometerReport & report) // NOLINT
   {
     protocol::unpack_common_data(data, report);
 
@@ -655,7 +655,7 @@ struct Deserializer<BottomTrackReport>
 {
   static void from_data(std::vector<std::uint8_t> data, BottomTrackReport & report)
   {
-    Deserializer<VelocityReport>::from_data(data, report);
+    Deserializer<VelocityReport>::from_data(data, report); // NOLINT
   }
 };
 
@@ -664,7 +664,7 @@ struct Deserializer<SurfaceTrackReport>
 {
   static void from_data(std::vector<std::uint8_t> data, SurfaceTrackReport & report)
   {
-    Deserializer<VelocityReport>::from_data(data, report);
+    Deserializer<VelocityReport>::from_data(data, report); // NOLINT
   }
 };
 

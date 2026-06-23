@@ -61,7 +61,7 @@ auto read_from_socket(
     return 0;  // timeout
   }
 
-  if (pfds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+  if ((pfds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
     return -1;
   }
 
@@ -172,13 +172,10 @@ auto open(const std::string & addr, std::uint16_t port, std::chrono::seconds con
 
 }  // namespace
 
-NucleusClient::NucleusClient(
-  const std::string & addr,
-  std::chrono::seconds connection_timeout,
-  std::int8_t max_connection_attempts)
+NucleusClient::NucleusClient(const std::string & addr, std::chrono::seconds connection_timeout, std::int8_t max_retries)
 {
   const std::uint16_t port = 9002;
-  if (max_connection_attempts < 0) {
+  if (max_retries < 0) {
     while (true) {
       try {
         socket_ = open(addr, port, connection_timeout);
@@ -190,7 +187,7 @@ NucleusClient::NucleusClient(
     }
   } else {
     std::exception_ptr last_error;
-    for (std::int8_t attempt = 0; attempt < max_connection_attempts; ++attempt) {
+    for (std::int8_t attempt = 0; attempt < max_retries; ++attempt) {
       try {
         socket_ = open(addr, port, connection_timeout);
         last_error = nullptr;
@@ -214,7 +211,7 @@ NucleusClient::NucleusClient(
   const std::string & addr,
   const std::string & password,
   std::chrono::seconds connection_timeout,
-  std::int8_t max_connection_attempts)
+  std::int8_t max_retries)
 {
   auto connect_and_login = [&] -> void {
     socket_ = open(addr, 9000, connection_timeout);
@@ -224,7 +221,7 @@ NucleusClient::NucleusClient(
     }
   };
 
-  if (max_connection_attempts < 0) {
+  if (max_retries < 0) {
     while (true) {
       try {
         connect_and_login();
@@ -236,7 +233,7 @@ NucleusClient::NucleusClient(
     }
   } else {
     std::exception_ptr last_error;
-    for (std::int8_t attempt = 0; attempt < max_connection_attempts; ++attempt) {
+    for (std::int8_t attempt = 0; attempt < max_retries; ++attempt) {
       try {
         connect_and_login();
         last_error = nullptr;

@@ -58,7 +58,10 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
   // pre-populate the sensor state messages with known, static values.
   twist_msg_.header.frame_id = params_.child_frame_id;
 
-  // the INS system doesn't report the covariances, so we don't set them
+  // the INS system doesn't report the covariances
+  //
+  // we could provide a parameter to allow users to manually configure the covariances themselves, but i'm assuming
+  // that the user will probably use the INS directly instead of re-filtering it.
   odom_msg_.header.frame_id = params_.frame_id;
   odom_msg_.child_frame_id = params_.child_frame_id;
 

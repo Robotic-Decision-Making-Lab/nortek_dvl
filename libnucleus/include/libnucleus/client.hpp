@@ -41,13 +41,13 @@ public:
   explicit NucleusClient(
     const std::string & addr,
     std::chrono::seconds connection_timeout = std::chrono::seconds(5),
-    std::int8_t max_connection_attempts = 1);
+    std::int8_t max_retries = 1);
 
   NucleusClient(
     const std::string & addr,
     const std::string & password,
     std::chrono::seconds connection_timeout = std::chrono::seconds(5),
-    std::int8_t max_connection_attempts = 1);
+    std::int8_t max_retries = 1);
 
   ~NucleusClient();
 
