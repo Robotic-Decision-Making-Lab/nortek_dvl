@@ -17,20 +17,39 @@ nucleus_driver:
         description: "The timeout for the DVL connection (s)."
         read_only: true
 
-    max_retries:
-        type: int
-        default_value: 3
-        description: "The maximum number of connection attempts."
-        read_only: true
-
     frame_id:
         type: string
         default_value: "odom_ned"
-        description: "The inertial frame ID."
+        description: "The frame ID of the DVL."
         read_only: true
 
     child_frame_id:
         type: string
         default_value: "dvl_link"
-        description: "The frame ID of the DVL."
+        description: "The child frame ID of the DVL (used for odometry)."
         read_only: true
+
+    base_frame_id:
+        type: string
+        default_value: "base_link"
+        description: "The body frame of the vehicle. Transform the INS pose measurements to this frame."
+        read_only: true
+
+    ins_covariance:
+        type: double_array
+        default_value:
+            - 0.1 # x
+            - 0.1 # y
+            - 0.1 # z
+            - 0.05 # rotation about x-axis
+            - 0.05 # rotation about y-axis
+            - 0.05 # rotation about z-axis
+            - 0.1 # vx
+            - 0.1 # vy
+            - 0.1 # vz
+            - 0.1 # wx
+            - 0.1 # wy
+            - 0.1 # wz
+        description: "The covariance of the DVL INS measurements."
+        validation:
+            fixed_size<>: 12

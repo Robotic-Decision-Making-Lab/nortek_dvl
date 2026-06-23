@@ -54,8 +54,8 @@ private:
 
   // Declare the DVL messages to avoid re-initializing it every time it gets published
   marine_acoustic_msgs::msg::Dvl dvl_msg_;
-  geometry_msgs::msg::TwistWithCovarianceStamped twist_msg_;
-  nav_msgs::msg::Odometry odom_msg_;
+  geometry_msgs::msg::TwistWithCovarianceStamped twist_msg_;  // used by state estimators
+  nav_msgs::msg::Odometry odom_msg_;  // used by state estimators
 
   std::shared_ptr<rclcpp::Publisher<marine_acoustic_msgs::msg::Dvl>> dvl_pub_;
   std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::TwistWithCovarianceStamped>> twist_pub_;

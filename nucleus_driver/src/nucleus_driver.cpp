@@ -24,6 +24,7 @@
 
 #include "libnucleus/report.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 namespace nucleus::ros
 {
@@ -47,25 +48,36 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
   }
 
   try {
-    client_ = std::make_unique<NucleusClient>(
-      params_.ip_address, params_.password, std::chrono::seconds(params_.timeout), params_.max_retries);
+    client_ =
+      std::make_unique<NucleusClient>(params_.ip_address, params_.password, std::chrono::seconds(params_.timeout));
   }
   catch (const std::exception & e) {
     RCLCPP_ERROR(get_logger(), "Failed to create NucleusClient. %s", e.what());
     return CallbackReturn::ERROR;
   }
 
-  // pre-populate the sensor state messages with known, static values.
+  // Pre-populate the sensor state messages with known, static values
+  dvl_msg_.header.frame_id = params_.child_frame_id;
   twist_msg_.header.frame_id = params_.child_frame_id;
-
-  // the INS system doesn't report the covariances
-  //
-  // we could provide a parameter to allow users to manually configure the covariances themselves, but i'm assuming
-  // that the user will probably use the INS directly instead of re-filtering it.
   odom_msg_.header.frame_id = params_.frame_id;
   odom_msg_.child_frame_id = params_.child_frame_id;
 
-  dvl_msg_.header.frame_id = params_.child_frame_id;
+  // the INS messages don't include the covariances, so we just leave them as a configurable
+  // parameter that users can set.
+  odom_msg_.pose.covariance[0] = params_.ins_covariance[0];
+  odom_msg_.pose.covariance[7] = params_.ins_covariance[1];
+  odom_msg_.pose.covariance[14] = params_.ins_covariance[2];
+  odom_msg_.pose.covariance[21] = params_.ins_covariance[3];
+  odom_msg_.pose.covariance[28] = params_.ins_covariance[4];
+  odom_msg_.pose.covariance[35] = params_.ins_covariance[5];
+
+  odom_msg_.twist.covariance[0] = params_.ins_covariance[6];
+  odom_msg_.twist.covariance[7] = params_.ins_covariance[7];
+  odom_msg_.twist.covariance[14] = params_.ins_covariance[8];
+  odom_msg_.twist.covariance[21] = params_.ins_covariance[9];
+  odom_msg_.twist.covariance[28] = params_.ins_covariance[10];
+  odom_msg_.twist.covariance[35] = params_.ins_covariance[11];
+
   dvl_msg_.velocity_mode = marine_acoustic_msgs::msg::Dvl::DVL_MODE_BOTTOM;
   dvl_msg_.dvl_type = marine_acoustic_msgs::msg::Dvl::DVL_TYPE_PISTON;  // 3-beam convex Janus array
 
@@ -95,10 +107,6 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
   twist_pub_ = create_publisher<geometry_msgs::msg::TwistWithCovarianceStamped>("~/twist", rclcpp::SystemDefaultsQoS());
   odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("~/odom", rclcpp::SystemDefaultsQoS());
 
-  // NOTE: in the following callbacks, we set the header timestamp to the system time instead of the report time.
-  // the DVL time can be desynchronized from the system time, so downstream users of these messages (e.g., state
-  // estimators) may reject the messages because of the time offset
-
   client_->subscribe<BottomTrackReport>([this](const BottomTrackReport & report) -> void {
     twist_msg_.header.stamp = this->get_clock()->now();
 
@@ -108,11 +116,11 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
     dvl_msg_.beam_ranges_valid = true;
     dvl_msg_.beam_velocities_valid = report.velocity_valid;
     dvl_msg_.course_gnd = std::atan2(report.vy, report.vx);
-    dvl_msg_.speed_gnd = std::sqrt((report.vx * report.vx) + (report.vy * report.vy));
+    dvl_msg_.speed_gnd = std::sqrt(report.vx * report.vx + report.vy * report.vy);
 
     for (std::size_t i = 0; i < 3; ++i) {
       for (std::size_t j = 0; j < 3; ++j) {
-        dvl_msg_.velocity_covar[(i * 3) + j] = report.covariance(i, j);
+        dvl_msg_.velocity_covar[i * 3 + j] = report.covariance(i, j);
       }
     }
 
@@ -137,7 +145,7 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
 
     for (std::size_t i = 0; i < 3; ++i) {
       for (std::size_t j = 0; j < 3; ++j) {
-        twist_msg_.twist.covariance[(i * 6) + j] = report.covariance(i, j);
+        twist_msg_.twist.covariance[i * 6 + j] = report.covariance(i, j);
       }
     }
 
@@ -149,22 +157,103 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
     [this](const AltimeterReport & report) -> void { dvl_msg_.altitude = report.distance; });
 
   client_->subscribe<INSReport>([this](const INSReport & report) -> void {
+    auto new_report = report;  // make a copy of the report so we don't modify the original data from the Nucleus
+
+    // KDL::Rotation R_odom(0, 1, 0,
+    //                     1, 0, 0,
+    //                     0, 0, -1);
+    auto q_odom = KDL::Rotation::Quaternion(0, 1, 0, 0);
+    KDL::Vector t_odom(0, 0, 0);
+    KDL::Frame t_odom_odom_ned(q_odom, t_odom);
+
+    // DVL pose in odom_ned
+    KDL::Frame pose_dvl(
+        KDL::Rotation::Quaternion(
+            report.orientation.x(),
+            report.orientation.y(),
+            report.orientation.z(),
+            report.orientation.w()),
+        KDL::Vector(report.x, report.y, report.z));
+
+    // Transform: base_link -> dvl_link (your TF)
+    KDL::Rotation R_base_to_dvl(-1, 0, 0,
+                                0, 1, 0,
+                                0, 0, -1);
+    KDL::Vector t_base_to_dvl(-0.219, -0.107, -0.179);
+    KDL::Frame tf_base_to_dvl(R_base_to_dvl, t_base_to_dvl);
+
+    // Inverse: dvl_link -> base_link
+    KDL::Frame tf_dvl_to_base = tf_base_to_dvl.Inverse();
+
+    // Pose of base_link in odom_ned
+    KDL::Frame pose_base_in_odom_ned = pose_dvl * tf_dvl_to_base;
+
+    // Transform from odom_ned to odom (aligned with base_link)
+    KDL::Frame tf_odom_ned_to_odom(R_base_to_dvl, KDL::Vector::Zero());
+
+    // Final pose: base_link in odom
+    KDL::Frame pose_final = pose_base_in_odom_ned;
+
+    // Extract position
+    new_report.x = pose_final.p.x();
+    new_report.y = pose_final.p.y();
+    new_report.z = pose_final.p.z();
+
+    // Extract orientation
+    double qx, qy, qz, qw;
+    pose_final.M.GetQuaternion(qx, qy, qz, qw);
+    new_report.orientation.x() = qx;
+    new_report.orientation.y() = qy;
+    new_report.orientation.z() = qz;
+    new_report.orientation.w() = qw;
+
+    // Transform twist
+    KDL::Vector linear_vel(report.vx, report.vy, report.vz);
+    KDL::Vector angular_vel(report.wx, report.wy, report.wz);
+
+    KDL::Vector linear_rotated = tf_dvl_to_base.M * linear_vel;
+    KDL::Vector angular_rotated = tf_dvl_to_base.M * angular_vel;
+
+    new_report.vx = linear_rotated.x();
+    new_report.vy = linear_rotated.y();
+    new_report.vz = linear_rotated.z();
+    new_report.wx = angular_rotated.x();
+    new_report.wy = angular_rotated.y();
+    new_report.wz = angular_rotated.z();
+
+    odom_msg_.pose.pose.position.x = new_report.x;
+    odom_msg_.pose.pose.position.y = new_report.y;
+    odom_msg_.pose.pose.position.z = new_report.z;
+
+    odom_msg_.pose.pose.orientation.x = new_report.orientation.x();
+    odom_msg_.pose.pose.orientation.y = new_report.orientation.y();
+    odom_msg_.pose.pose.orientation.z = new_report.orientation.z();
+    odom_msg_.pose.pose.orientation.w = new_report.orientation.w();
+
+    odom_msg_.twist.twist.linear.x = new_report.vx;
+    odom_msg_.twist.twist.linear.y = new_report.vy;
+    odom_msg_.twist.twist.linear.z = new_report.vz;
+    odom_msg_.twist.twist.angular.x = new_report.wx;
+    odom_msg_.twist.twist.angular.y = new_report.wy;
+    odom_msg_.twist.twist.angular.z = new_report.wz;
+
     odom_msg_.header.stamp = this->get_clock()->now();
-    odom_msg_.pose.pose.position.x = report.x;
-    odom_msg_.pose.pose.position.y = report.y;
-    odom_msg_.pose.pose.position.z = report.z;
 
-    odom_msg_.pose.pose.orientation.x = report.orientation.x();
-    odom_msg_.pose.pose.orientation.y = report.orientation.y();
-    odom_msg_.pose.pose.orientation.z = report.orientation.z();
-    odom_msg_.pose.pose.orientation.w = report.orientation.w();
+    // odom_msg_.pose.pose.position.x = report.x - 0.219013;
+    // odom_msg_.pose.pose.position.y = report.y - 0.107500;
+    // odom_msg_.pose.pose.position.z = report.z - 0.179057;
 
-    odom_msg_.twist.twist.linear.x = report.vx;
-    odom_msg_.twist.twist.linear.y = report.vy;
-    odom_msg_.twist.twist.linear.z = report.vz;
-    odom_msg_.twist.twist.angular.x = report.wx;
-    odom_msg_.twist.twist.angular.y = report.wy;
-    odom_msg_.twist.twist.angular.z = report.wz;
+    // odom_msg_.pose.pose.orientation.x = report.orientation.x();
+    // odom_msg_.pose.pose.orientation.y = report.orientation.y();
+    // odom_msg_.pose.pose.orientation.z = report.orientation.z();
+    // odom_msg_.pose.pose.orientation.w = report.orientation.w();
+
+    // odom_msg_.twist.twist.linear.x = report.vx;
+    // odom_msg_.twist.twist.linear.y = report.vy;
+    // odom_msg_.twist.twist.linear.z = report.vz;
+    // odom_msg_.twist.twist.angular.x = report.wx;
+    // odom_msg_.twist.twist.angular.y = report.wy;
+    // odom_msg_.twist.twist.angular.z = report.wz;
 
     odom_pub_->publish(odom_msg_);
   });
@@ -179,8 +268,8 @@ auto NucleusDriver::on_activate(const rclcpp_lifecycle::State & /*previous_state
   RCLCPP_DEBUG(get_logger(), "Activating the NucleusDriver");
   RCLCPP_DEBUG(get_logger(), "Stopping previous data streams to reset the DVL");
 
-  // stop measurements first in case the Nucleus is already streaming from a previous run
-  // we mostly do this to reset the INS
+  // stop measurement first in case the Nucleus is already streaming from a previous run
+  // we mostly do this to reset the INS (and any other stateful processing in the Nucleus)
   std::future<Response> stop_future = client_->stop_measurement();
   switch (stop_future.wait_for(std::chrono::seconds(1))) {
     case std::future_status::ready: {
@@ -204,6 +293,7 @@ auto NucleusDriver::on_activate(const rclcpp_lifecycle::State & /*previous_state
       RCLCPP_DEBUG(get_logger(), "Start measurement response: %s", result.success ? "success" : "failure");
       break;
     }
+      break;
     case std::future_status::timeout:
       RCLCPP_WARN(get_logger(), "Start measurement attempt timed out: the Nucleus may already be streaming");
       break;

@@ -9,20 +9,15 @@ nucleus_driver_node:
         # Default password for the DVL.
         password: "nortek"
 
-        # Specify a timeout for the DVL connection.
+        # Specify a timeout for the DVL connection
         timeout: 5 # seconds
-
-        # Specify the maximum number of connection attempts made. Set to -1
-        # to retry indefinitely.
-        max_retries: 1
-
-        # The INS inertial frame is defined using the NED orientation positioned
-        # at the point where the "start measurement" command is issued.
-        frame_id: "odom_ned"
 
         # All measurements are obtained from the DVL use the following coordinate
         # convention:
         # - x: Forward
         # - y: Right
         # - z: Down
-        child_frame_id: "dvl_link"
+        # This can be rotated using the mounting_rotation_offset parameter.
+        frame_id: "odom"
+        base_frame_id: "base_link"
+        child_frame_id: "base_link"
