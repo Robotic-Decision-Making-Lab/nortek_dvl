@@ -159,12 +159,12 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
   client_->subscribe<INSReport>([this](const INSReport & report) -> void {
     auto new_report = report;  // make a copy of the report so we don't modify the original data from the Nucleus
 
-    // KDL::Rotation R_odom(0, 1, 0,
-    //                     1, 0, 0,
-    //                     0, 0, -1);
-    auto q_odom = KDL::Rotation::Quaternion(0, 1, 0, 0);
+    // Transform: odom_ned (NED) -> odom (ENU)
+    KDL::Rotation R_odom(0, 1, 0,
+                        1, 0, 0,
+                        0, 0,-1);
     KDL::Vector t_odom(0, 0, 0);
-    KDL::Frame t_odom_odom_ned(q_odom, t_odom);
+    KDL::Frame tf_odom_ned_to_odom(R_odom, t_odom);
 
     // DVL pose in odom_ned
     KDL::Frame pose_dvl(
@@ -188,11 +188,8 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
     // Pose of base_link in odom_ned
     KDL::Frame pose_base_in_odom_ned = pose_dvl * tf_dvl_to_base;
 
-    // Transform from odom_ned to odom (aligned with base_link)
-    KDL::Frame tf_odom_ned_to_odom(R_base_to_dvl, KDL::Vector::Zero());
-
-    // Final pose: base_link in odom
-    KDL::Frame pose_final = pose_base_in_odom_ned;
+    // Final pose: base_link in odom (apply NED -> ENU)
+    KDL::Frame pose_final = tf_odom_ned_to_odom * pose_base_in_odom_ned;
 
     // Extract position
     new_report.x = pose_final.p.x();
@@ -207,16 +204,24 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
     new_report.orientation.z() = qz;
     new_report.orientation.w() = qw;
 
-    // Transform twist
+    // ---- Twist ----
+    // Nucleus reports body-frame twist at the DVL point, in dvl_link (FRD) axes.
+    // We want: body-frame twist of base_link, expressed in base_link (FLU) axes.
     KDL::Vector linear_vel(report.vx, report.vy, report.vz);
     KDL::Vector angular_vel(report.wx, report.wy, report.wz);
 
+    // Rotate into base_link axes.
     KDL::Vector linear_rotated = tf_dvl_to_base.M * linear_vel;
     KDL::Vector angular_rotated = tf_dvl_to_base.M * angular_vel;
 
-    new_report.vx = linear_rotated.x();
-    new_report.vy = linear_rotated.y();
-    new_report.vz = linear_rotated.z();
+    // Lever-arm correction: shift linear velocity from the DVL point to base_link.
+    //   v_base = v_dvl_in_base - ω_base × t_base_to_dvl
+    // KDL overloads Vector * Vector as the cross product.
+    KDL::Vector linear_corrected = linear_rotated - angular_rotated * t_base_to_dvl;
+
+    new_report.vx = linear_corrected.x();
+    new_report.vy = linear_corrected.y();
+    new_report.vz = linear_corrected.z();
     new_report.wx = angular_rotated.x();
     new_report.wy = angular_rotated.y();
     new_report.wz = angular_rotated.z();
