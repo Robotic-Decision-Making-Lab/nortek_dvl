@@ -188,8 +188,14 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
     // Pose of base_link in odom_ned
     KDL::Frame pose_base_in_odom_ned = pose_dvl * tf_dvl_to_base;
 
-    // Final pose: base_link in odom (apply NED -> ENU)
-    KDL::Frame pose_final = tf_odom_ned_to_odom * pose_base_in_odom_ned;
+    // Final pose: base_link in odom (apply NED -> ENU as a similarity transform)
+    //   p_enu = M * p_ned
+    //   R_enu = M * R_ned * M^-1   (conjugation: maps both world and body axes)
+    KDL::Frame pose_final;
+    pose_final.p = tf_odom_ned_to_odom.M * pose_base_in_odom_ned.p;
+    pose_final.M = tf_odom_ned_to_odom.M
+                 * pose_base_in_odom_ned.M
+                 * tf_odom_ned_to_odom.M.Inverse();
 
     // Extract position
     new_report.x = pose_final.p.x();
