@@ -1,21 +1,21 @@
 nucleus_driver_node:
-  ros__parameters:
-    # Descriptions for all DVL configurations can be found in the Nucleus
-    # documentation
+    ros__parameters:
+        # Descriptions for all DVL configurations can be found in the Nucleus
+        # documentation
 
-    # Default IP address for the Nucleus DVL when used with the BlueROV2.
-    ip_address: "192.168.2.201"
+        # Default IP address for the Nucleus DVL when used with the BlueROV2.
+        ip_address: "192.168.2.201"
 
-    # Default password for the DVL.
-    password: "nortek"
+        # Default password for the DVL.
+        password: "nortek"
 
-    # Specify a timeout for the DVL connection
-    timeout: 5 # seconds
+        # Specify a timeout for the DVL connection
+        timeout: 5 # seconds
 
-    # All measurements are obtained from the DVL use the following coordinate
-    # convention:
-    # - x: Forward
-    # - y: Right
-    # - z: Down
-    # This can be rotated using the mounting_rotation_offset parameter.
-    frame_id: "dvl_link"
+        # All measurements are obtained from the DVL use the following coordinate
+        # convention:
+        # - x: Forward
+        # - y: Right
+        # - z: Down
+        # This can be rotated using the mounting_rotation_offset parameter.
+        frame_id: "dvl_link"

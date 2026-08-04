@@ -22,7 +22,6 @@
 
 #include "libnucleus/client.hpp"
 #include "libnucleus/report.hpp"
-#include "libnucleus/series_id.hpp"
 
 auto main() -> int
 {

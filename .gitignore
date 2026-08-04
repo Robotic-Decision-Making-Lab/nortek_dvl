@@ -8,3 +8,6 @@ log/
 
 # Ruff
 .ruff_cache
+
+# build cache
+.cache
