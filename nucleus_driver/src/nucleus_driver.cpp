@@ -208,7 +208,8 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
     // Nucleus reports body-frame twist at the DVL point, in dvl_link (FRD) axes.
     // We want: body-frame twist of base_link, expressed in base_link (FLU) axes.
     KDL::Vector linear_vel(report.vx, report.vy, report.vz);
-    KDL::Vector angular_vel(report.wx, report.wy, report.wz);
+    const double d2r = M_PI / 180.0;
+    KDL::Vector angular_vel(report.wx * d2r, report.wy * d2r, report.wz * d2r);
 
     // Rotate into base_link axes.
     KDL::Vector linear_rotated = tf_dvl_to_base.M * linear_vel;
