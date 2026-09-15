@@ -115,50 +115,47 @@ auto decode_packets(const std::deque<std::uint8_t> & data) -> std::tuple<std::ve
 
   std::vector<Packet> packets;
 
-  auto start = data.begin();
-  auto iter = std::ranges::find(data, protocol::SYNC_BYTE);
-  auto erase_iter = data.begin();
+  // any bytes preceding the first sync byte aren't part of a packet and can always be dropped, regardless of
+  // whether we end up decoding anything below
+  auto erase_iter = std::ranges::find(data, protocol::SYNC_BYTE);
+  auto sync = erase_iter;
 
-  while (iter != data.end()) {
-    start = iter;
-    auto next = std::ranges::find(std::next(iter), data.end(), protocol::SYNC_BYTE);
+  // the minimum number of bytes needed to compute the packet size from the header
+  const std::size_t min_header_bytes = 6;
+
+  while (sync != data.end()) {
+    if (std::cmp_less(std::distance(sync, data.end()), min_header_bytes)) {
+      break;  // not enough data yet to know how big this packet is, so wait for more to arrive
+    }
 
     std::size_t expected_size;
     try {
-      expected_size = calculate_packet_size(std::vector<std::uint8_t>(start, next));
+      // a packet's length is fully determined by its own header, so use that -- rather than the position of some
+      // later byte that happens to equal the sync byte -- to find its end. payloads are binary sensor data, and the
+      // sync byte value (0xA5) can and does appear inside them by chance, so searching for a "next" sync byte to
+      // bound the current packet corrupts the length and causes every following packet to fail its checksum.
+      expected_size = calculate_packet_size(std::vector<std::uint8_t>(sync, data.end()));
     }
     catch (const std::exception & e) {
-      break;  // we don't have a full packet yet, so wait for more data to arrive
+      break;  // shouldn't happen given the size check above, but wait for more data just in case
     }
 
-    if (std::cmp_greater_equal(expected_size, std::distance(start, next))) {
-      // we have two contiguous packets in the buffer, so we can attempt to decode multiple packets at once.
-      // note that we set the packet data to be everything between the current sync byte and the next, disregarding
-      // the expected size. this is because the expected size may be incorrect.
-      const std::vector<std::uint8_t> packet_data(start, next);
-      try {
-        packets.push_back(decode_packet(packet_data));
-      }
-      catch (const std::exception & e) {  // NOLINT
-        // decoding error - just ignore it and move on to the next packet
-      }
-      erase_iter = next;
-    } else {
-      // there is some data between the current sync byte and the next. we need to let the polling function extract
-      // that ascii data before we attempt to decode any additional packets, so just extract the first packet
-      const auto safe_end = std::min(start + expected_size, data.end());
-      const std::vector<std::uint8_t> packet_data(start, safe_end);
-      try {
-        packets.push_back(decode_packet(packet_data));
-      }
-      catch (const std::exception & e) {  // NOLINT
-        // decoding error - just ignore it
-      }
-      erase_iter = safe_end;
-      break;
+    if (std::cmp_greater(expected_size, std::distance(sync, data.end()))) {
+      break;  // we don't have the full packet yet, so wait for more data to arrive
     }
 
-    iter = next;
+    const std::vector<std::uint8_t> packet_data(sync, sync + expected_size);
+    try {
+      packets.push_back(decode_packet(packet_data));
+      erase_iter = sync + expected_size;
+      sync = std::ranges::find(erase_iter, data.end(), protocol::SYNC_BYTE);
+    }
+    catch (const std::exception & e) {  // NOLINT
+      // this position wasn't actually the start of a valid packet -- most likely a byte inside a preceding
+      // packet's payload that happened to match the sync byte. skip past it and keep looking; don't advance
+      // erase_iter, since we haven't actually validated any additional data yet.
+      sync = std::ranges::find(std::next(sync), data.end(), protocol::SYNC_BYTE);
+    }
   }
 
   return {packets, std::distance(data.begin(), erase_iter)};
