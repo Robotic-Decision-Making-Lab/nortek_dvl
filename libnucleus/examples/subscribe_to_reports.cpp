@@ -26,7 +26,9 @@
 auto main() -> int
 {
   nucleus::NucleusClient client("192.168.2.201", "nortek");
-  auto start_future = client.start_measurement();
+  if (client.start_measurement().wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
+    std::cerr << "Start measurement attempt timed out: the Nucleus may already be streaming\n";
+  }
 
   client.subscribe<nucleus::BottomTrackReport>([](const nucleus::BottomTrackReport & report) -> void {
     std::cout << std::format("timestamp={}, vx={}, vy={}, vz={}\n", report.timestamp, report.vx, report.vy, report.vz);
@@ -35,7 +37,9 @@ auto main() -> int
 
   std::this_thread::sleep_for(std::chrono::seconds(10));
 
-  auto stop_future = client.stop_measurement();
+  if (client.stop_measurement().wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
+    std::cerr << "Stop measurement attempt timed out\n";
+  }
 
   return 0;
 }

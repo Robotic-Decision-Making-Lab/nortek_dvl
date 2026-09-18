@@ -142,10 +142,9 @@ auto NucleusDriver::on_configure(const rclcpp_lifecycle::State & /*previous_stat
 
 auto NucleusDriver::on_activate(const rclcpp_lifecycle::State & /*previous_state*/) -> CallbackReturn
 {
-  std::future<Response> f = client_->start_measurement();
-  std::future_status status = f.wait_for(std::chrono::seconds(1));
+  const std::future<Response> f = client_->start_measurement();
 
-  switch (status = f.wait_for(std::chrono::seconds(1))) {
+  switch (f.wait_for(std::chrono::seconds(1))) {
     case std::future_status::ready:
       break;
     case std::future_status::timeout:

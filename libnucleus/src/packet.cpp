@@ -22,8 +22,8 @@
 
 #include <algorithm>
 #include <stdexcept>
-#include <vector>
 #include <utility>
+#include <vector>
 
 #include "checksum.hpp"
 
@@ -115,50 +115,38 @@ auto decode_packets(const std::deque<std::uint8_t> & data) -> std::tuple<std::ve
 
   std::vector<Packet> packets;
 
-  auto start = data.begin();
-  auto iter = std::ranges::find(data, protocol::SYNC_BYTE);
-  auto erase_iter = data.begin();
+  auto erase_iter = std::ranges::find(data, protocol::SYNC_BYTE);
+  auto sync = erase_iter;
 
-  while (iter != data.end()) {
-    start = iter;
-    auto next = std::ranges::find(std::next(iter), data.end(), protocol::SYNC_BYTE);
+  // the minimum number of bytes needed to compute the packet size from the header
+  const std::size_t min_header_bytes = 6;
 
-    std::size_t expected_size;
-    try {
-      expected_size = calculate_packet_size(std::vector<std::uint8_t>(start, next));
-    }
-    catch (const std::exception & e) {
-      break;  // we don't have a full packet yet, so wait for more data to arrive
-    }
-
-    if (std::cmp_greater_equal(expected_size, std::distance(start, next))) {
-      // we have two contiguous packets in the buffer, so we can attempt to decode multiple packets at once.
-      // note that we set the packet data to be everything between the current sync byte and the next, disregarding
-      // the expected size. this is because the expected size may be incorrect.
-      const std::vector<std::uint8_t> packet_data(start, next);
-      try {
-        packets.push_back(decode_packet(packet_data));
-      }
-      catch (const std::exception & e) {  // NOLINT
-        // decoding error - just ignore it and move on to the next packet
-      }
-      erase_iter = next;
-    } else {
-      // there is some data between the current sync byte and the next. we need to let the polling function extract
-      // that ascii data before we attempt to decode any additional packets, so just extract the first packet
-      const auto safe_end = std::min(start + expected_size, data.end());
-      const std::vector<std::uint8_t> packet_data(start, safe_end);
-      try {
-        packets.push_back(decode_packet(packet_data));
-      }
-      catch (const std::exception & e) {  // NOLINT
-        // decoding error - just ignore it
-      }
-      erase_iter = safe_end;
+  while (sync != data.end()) {
+    if (std::cmp_less(std::distance(sync, data.end()), min_header_bytes)) {
       break;
     }
 
-    iter = next;
+    std::size_t expected_size;
+    try {
+      expected_size = calculate_packet_size(std::vector<std::uint8_t>(sync, data.end()));
+    }
+    catch (const std::exception & e) {
+      break;
+    }
+
+    if (std::cmp_greater(expected_size, std::distance(sync, data.end()))) {
+      break;
+    }
+
+    const std::vector<std::uint8_t> packet_data(sync, sync + expected_size);
+    try {
+      packets.push_back(decode_packet(packet_data));
+      erase_iter = sync + expected_size;
+      sync = std::ranges::find(erase_iter, data.end(), protocol::SYNC_BYTE);
+    }
+    catch (const std::exception & e) {  // NOLINT
+      sync = std::ranges::find(std::next(sync), data.end(), protocol::SYNC_BYTE);
+    }
   }
 
   return {packets, std::distance(data.begin(), erase_iter)};

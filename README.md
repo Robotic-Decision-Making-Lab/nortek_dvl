@@ -22,8 +22,7 @@ git clone git@github.com:Robotic-Decision-Making-Lab/nortek_dvl.git
 Then install the project dependencies using vcstool and rosdep
 
 ```bash
-vcs import src < src/nortek_dvl/ros2.repos && \
-rosdep install --from paths src -y --ignore-src --skip-keys nlohmann_json
+rosdep install --from paths src -y --ignore-src
 ```
 
 Finally, build the workspace using colcon

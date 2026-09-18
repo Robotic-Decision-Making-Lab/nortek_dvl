@@ -2,6 +2,5 @@
 *
 
 # Except the following
-!ros2.repos
 !nortek_dvl_driver
 !libnortek
