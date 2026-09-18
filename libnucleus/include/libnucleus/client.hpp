@@ -526,7 +526,7 @@ public:
   template <typename T>
   auto subscribe(std::function<void(const T &)> && callback) -> void
   {
-    std::lock_guard<std::mutex> lock(callback_mutex_);  // NOLINT
+    const std::scoped_lock lock(callback_mutex_);
     callbacks_[typeid(T)].emplace_back(
       [cb = std::move(callback)](const void * report) -> auto { cb(*static_cast<const T *>(report)); });
   }

@@ -61,7 +61,7 @@ auto read_from_socket(
     return 0;  // timeout
   }
 
-  if (pfds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+  if ((pfds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
     return -1;
   }
 
@@ -211,7 +211,7 @@ NucleusClient::~NucleusClient()
 auto NucleusClient::send_command(const std::string & command) -> std::future<Response>
 {
   {
-    std::lock_guard lock(socket_mutex_);
+    const std::scoped_lock lock(socket_mutex_);
     if (send(socket_, (command + protocol::DELIMITER).c_str(), command.size() + 2, 0) < 0) {
       throw std::runtime_error("Failed to send command to DVL");
     }
@@ -223,7 +223,7 @@ auto NucleusClient::send_command(const std::string & command) -> std::future<Res
   {
     // there isn't any identifier in the text responses, so the best that we can do is set the responses in the order
     // that the commands were sent
-    std::lock_guard lock(command_mutex_);
+    const std::scoped_lock lock(command_mutex_);
     pending_responses_.emplace_back(std::move(response));
   }
 
@@ -563,7 +563,7 @@ auto NucleusClient::get_error() -> std::future<Response>
 auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
 {
   auto dispatch_report = [this](const auto & report) -> void {
-    std::lock_guard lock(callback_mutex_);
+    const std::scoped_lock lock(callback_mutex_);
     auto it = callbacks_.find(typeid(report));
     if (it != callbacks_.end()) {
       for (const auto & callback : it->second) {
@@ -614,7 +614,7 @@ auto NucleusClient::process_incoming_packet(const Packet & packet) -> void
 
 auto NucleusClient::process_incoming_response(const Response & response) -> void
 {
-  std::lock_guard lock(command_mutex_);
+  const std::scoped_lock lock(command_mutex_);
   if (!pending_responses_.empty()) {
     auto promise = std::move(pending_responses_.front());
     pending_responses_.pop_front();
@@ -634,7 +634,7 @@ auto NucleusClient::poll_connection() -> void
   while (running_.load()) {
     ssize_t n_read = -1;  // NOLINT
     {
-      std::lock_guard lock(socket_mutex_);
+      const std::scoped_lock lock(socket_mutex_);
       n_read = read_from_socket(socket_, buffer, max_bytes_to_read);
     }
 
@@ -658,7 +658,7 @@ auto NucleusClient::poll_connection() -> void
     auto first_sync = std::ranges::find(buffer, protocol::SYNC_BYTE);
     if (first_sync != buffer.end()) {
       // process all data leading up to the first sync byte as ASCII data, which should contain command responses
-      std::deque<std::uint8_t> ascii_data(buffer.begin(), first_sync);
+      const std::deque<std::uint8_t> ascii_data(buffer.begin(), first_sync);
       auto [responses, unused] = protocol::decode_responses(ascii_data);
       for (const auto & response : responses) {
         process_incoming_response(response);
