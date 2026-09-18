@@ -673,7 +673,8 @@ auto NucleusClient::poll_connection() -> void
           for (const auto & packet : packets) {
             try {
               process_incoming_packet(packet);
-            } catch (const std::exception & e) {
+            }
+            catch (const std::exception & e) {
               std::cout << "Failed to process packet: " << e.what() << "\n";
             }
           }
